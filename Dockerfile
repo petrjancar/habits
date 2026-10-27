@@ -20,7 +20,7 @@ RUN npm run build
 #    not exist in a fresh clone (git doesn't track empty or ignored dirs),
 #    so make sure they exist before copying them into the final image.
 # ---------------------------------------------------------------------------
-FROM alpine:3.22 AS backend-src
+FROM alpine:3.24 AS backend-src
 WORKDIR /src
 COPY . .
 RUN mkdir -p pb_hooks pb_migrations
@@ -28,7 +28,7 @@ RUN mkdir -p pb_hooks pb_migrations
 # ---------------------------------------------------------------------------
 # 3. Download PocketBase (verified against the release checksums)
 # ---------------------------------------------------------------------------
-FROM alpine:3.22 AS pocketbase
+FROM alpine:3.24 AS pocketbase
 ARG PB_VERSION
 # Set automatically by BuildKit (amd64, arm64, ...)
 ARG TARGETARCH
@@ -43,7 +43,7 @@ RUN apk add --no-cache unzip \
 # ---------------------------------------------------------------------------
 # 4. Runtime image
 # ---------------------------------------------------------------------------
-FROM alpine:3.22
+FROM alpine:3.24
 RUN apk add --no-cache ca-certificates \
  && adduser -D -H -u 1000 pocketbase \
  && mkdir -p /pb/pb_data \
