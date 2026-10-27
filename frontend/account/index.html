@@ -1,0 +1,621 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <load src="/components/head.html" />
+    <title>Account · Habits</title>
+    <!-- blocking="render": the browser keeps showing the previous page until
+         this page is fully built, so nothing appears half-drawn. -->
+    <script type="module" src="/src/account.js" blocking="render"></script>
+  </head>
+  <body class="min-h-dvh">
+    <load src="/components/nav.html" active="account" />
+
+    <main class="page" x-data="accountComponent">
+      <div class="flex flex-wrap items-center justify-between gap-5">
+        <div class="flex min-w-0 items-center gap-5">
+          <span
+            class="avatar size-16 text-[28px] sm:size-20 sm:text-[34px]"
+            x-text="initials($store.auth.user)"
+            aria-hidden="true"
+          ></span>
+          <div class="min-w-0">
+            <h1
+              class="page-title truncate"
+              x-text="$store.auth.user?.name || 'Your account'"
+            ></h1>
+            <p class="mt-1 text-[17px] text-muted">
+              Joined
+              <span x-text="formatDate($store.auth.user?.created)"></span>
+            </p>
+          </div>
+        </div>
+        <button
+          type="button"
+          class="btn btn-secondary btn-sm md:hidden"
+          @click="logout()"
+        >
+          Log out
+        </button>
+      </div>
+
+      <div class="flex flex-wrap items-start gap-6">
+        <div class="flex min-w-0 flex-[1_1_440px] flex-col gap-6">
+          <section
+            class="card flex flex-col gap-[18px] p-5 sm:p-6"
+            aria-labelledby="details-heading"
+          >
+            <div>
+              <h2 id="details-heading" class="text-xl font-bold">Details</h2>
+              <p class="text-[15px] text-muted">How you appear in the app.</p>
+            </div>
+            <form @submit.prevent="save" class="flex flex-col gap-[18px]">
+              <template x-if="errorMessage">
+                <div
+                  class="alert alert-error"
+                  x-text="errorMessage"
+                  role="alert"
+                ></div>
+              </template>
+              <template x-if="successMessage">
+                <div
+                  class="alert alert-success"
+                  x-text="successMessage"
+                  role="status"
+                ></div>
+              </template>
+
+              <div>
+                <label for="account-name" class="label">Name</label>
+                <input
+                  id="account-name"
+                  name="name"
+                  type="text"
+                  autocomplete="name"
+                  required
+                  x-model="name"
+                  :aria-invalid="!!fieldErrors.name"
+                  aria-describedby="account-name-error"
+                  class="input"
+                />
+                <p
+                  id="account-name-error"
+                  x-show="fieldErrors.name"
+                  x-text="fieldErrors.name"
+                  class="field-error"
+                ></p>
+              </div>
+
+              <div>
+                <label for="account-email" class="label">Email</label>
+                <input
+                  id="account-email"
+                  name="email"
+                  type="email"
+                  autocomplete="username"
+                  x-model="email"
+                  readonly
+                  aria-describedby="account-email-hint"
+                  class="input"
+                />
+                <p id="account-email-hint" class="field-hint">
+                  Your email can't be changed here.
+                </p>
+              </div>
+
+              <p class="text-sm text-muted">
+                Account ID
+                <span
+                  class="ml-1 break-all text-ink"
+                  x-text="$store.auth.user?.id"
+                ></span>
+              </p>
+
+              <button
+                type="submit"
+                :disabled="loading"
+                class="btn btn-primary self-start"
+              >
+                <span x-show="!loading">Save changes</span>
+                <span x-show="loading" x-cloak>Saving…</span>
+              </button>
+            </form>
+          </section>
+
+          <section
+            class="card flex flex-col gap-[18px] p-5 sm:p-6"
+            aria-labelledby="password-heading"
+          >
+            <div>
+              <h2 id="password-heading" class="text-xl font-bold">Password</h2>
+              <p class="text-[15px] leading-snug text-muted">
+                You stay logged in here. Other devices are logged out.
+              </p>
+            </div>
+            <form
+              @submit.prevent="changePassword"
+              class="flex flex-col gap-[18px]"
+            >
+              <template x-if="passwordError">
+                <div
+                  class="alert alert-error"
+                  x-text="passwordError"
+                  role="alert"
+                ></div>
+              </template>
+              <template x-if="passwordSuccess">
+                <div
+                  class="alert alert-success"
+                  x-text="passwordSuccess"
+                  role="status"
+                ></div>
+              </template>
+
+              <!-- Tells password managers which account this password belongs to. -->
+              <input
+                type="email"
+                name="username"
+                autocomplete="username"
+                :value="email"
+                readonly
+                hidden
+              />
+
+              <div>
+                <label for="account-current-password" class="label"
+                  >Current password</label
+                >
+                <div class="relative" x-data="passwordField">
+                  <input
+                    id="account-current-password"
+                    name="current-password"
+                    type="password"
+                    :type="visible ? 'text' : 'password'"
+                    autocomplete="current-password"
+                    required
+                    x-model="passwordForm.oldPassword"
+                    :aria-invalid="!!passwordErrors.oldPassword"
+                    aria-describedby="account-current-password-error"
+                    class="input"
+                  />
+                  <button
+                    type="button"
+                    class="password-toggle"
+                    @click="toggle()"
+                    :aria-pressed="visible.toString()"
+                    aria-controls="account-current-password"
+                    aria-label="Show password"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="20"
+                      height="20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+                      />
+                      <circle cx="12" cy="12" r="3" />
+                      <path x-show="visible" x-cloak d="M3 3l18 18" />
+                    </svg>
+                  </button>
+                </div>
+                <p
+                  id="account-current-password-error"
+                  x-show="passwordErrors.oldPassword"
+                  x-text="passwordErrors.oldPassword"
+                  class="field-error"
+                ></p>
+              </div>
+
+              <div>
+                <label for="account-new-password" class="label"
+                  >New password</label
+                >
+                <div class="relative" x-data="passwordField">
+                  <input
+                    id="account-new-password"
+                    name="new-password"
+                    type="password"
+                    :type="visible ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    required
+                    minlength="8"
+                    x-model="passwordForm.password"
+                    :aria-invalid="!!passwordErrors.password"
+                    aria-describedby="account-new-password-error account-new-password-hint"
+                    class="input"
+                  />
+                  <button
+                    type="button"
+                    class="password-toggle"
+                    @click="toggle()"
+                    :aria-pressed="visible.toString()"
+                    aria-controls="account-new-password"
+                    aria-label="Show password"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="20"
+                      height="20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+                      />
+                      <circle cx="12" cy="12" r="3" />
+                      <path x-show="visible" x-cloak d="M3 3l18 18" />
+                    </svg>
+                  </button>
+                </div>
+                <p id="account-new-password-hint" class="field-hint">
+                  At least 8 characters.
+                </p>
+                <p
+                  id="account-new-password-error"
+                  x-show="passwordErrors.password"
+                  x-text="passwordErrors.password"
+                  class="field-error"
+                ></p>
+              </div>
+
+              <div>
+                <label for="account-new-password-confirm" class="label"
+                  >Confirm new password</label
+                >
+                <div class="relative" x-data="passwordField">
+                  <input
+                    id="account-new-password-confirm"
+                    name="new-password-confirm"
+                    type="password"
+                    :type="visible ? 'text' : 'password'"
+                    autocomplete="new-password"
+                    enterkeyhint="done"
+                    required
+                    minlength="8"
+                    x-model="passwordForm.passwordConfirm"
+                    :aria-invalid="!!passwordErrors.passwordConfirm"
+                    aria-describedby="account-new-password-confirm-error"
+                    class="input"
+                  />
+                  <button
+                    type="button"
+                    class="password-toggle"
+                    @click="toggle()"
+                    :aria-pressed="visible.toString()"
+                    aria-controls="account-new-password-confirm"
+                    aria-label="Show password"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="20"
+                      height="20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.75"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path
+                        d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"
+                      />
+                      <circle cx="12" cy="12" r="3" />
+                      <path x-show="visible" x-cloak d="M3 3l18 18" />
+                    </svg>
+                  </button>
+                </div>
+                <p
+                  id="account-new-password-confirm-error"
+                  x-show="passwordErrors.passwordConfirm"
+                  x-text="passwordErrors.passwordConfirm"
+                  class="field-error"
+                ></p>
+              </div>
+
+              <button
+                type="submit"
+                :disabled="passwordLoading"
+                class="btn btn-primary self-start"
+              >
+                <span x-show="!passwordLoading">Change password</span>
+                <span x-show="passwordLoading" x-cloak>Changing password…</span>
+              </button>
+            </form>
+          </section>
+        </div>
+
+        <div class="flex min-w-0 flex-[1_1_440px] flex-col gap-6">
+          <section
+            class="card flex flex-col gap-[22px] p-5 sm:p-6"
+            aria-labelledby="settings-heading"
+          >
+            <div>
+              <h2 id="settings-heading" class="text-xl font-bold">Settings</h2>
+              <p class="text-[15px] text-muted">
+                How the app looks and counts.
+              </p>
+            </div>
+
+            <div
+              x-show="settingsError"
+              x-cloak
+              class="alert alert-error"
+              role="alert"
+              x-text="settingsError"
+            ></div>
+
+            <div class="flex flex-col gap-2.5">
+              <span id="theme-label" class="label mb-0">Theme</span>
+              <div role="group" aria-labelledby="theme-label" class="segmented">
+                <button
+                  type="button"
+                  class="segment"
+                  @click="setTheme('light')"
+                  aria-pressed="false"
+                  :aria-pressed="(theme === 'light').toString()"
+                >
+                  Light
+                </button>
+                <button
+                  type="button"
+                  class="segment"
+                  @click="setTheme('dark')"
+                  aria-pressed="false"
+                  :aria-pressed="(theme === 'dark').toString()"
+                >
+                  Dark
+                </button>
+                <button
+                  type="button"
+                  class="segment"
+                  @click="setTheme('system')"
+                  aria-pressed="false"
+                  :aria-pressed="(theme === 'system').toString()"
+                >
+                  System
+                </button>
+              </div>
+            </div>
+
+            <div class="flex flex-col gap-2.5">
+              <span id="week-label" class="label mb-0">Week starts on</span>
+              <div role="group" aria-labelledby="week-label" class="segmented">
+                <button
+                  type="button"
+                  class="segment"
+                  @click="setWeekStart('monday')"
+                  aria-pressed="false"
+                  :aria-pressed="(weekStart === 'monday').toString()"
+                >
+                  Monday
+                </button>
+                <button
+                  type="button"
+                  class="segment"
+                  @click="setWeekStart('sunday')"
+                  aria-pressed="false"
+                  :aria-pressed="(weekStart === 'sunday').toString()"
+                >
+                  Sunday
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              @click="exportCsv()"
+              :disabled="exporting"
+              class="flex min-h-14 w-full items-center justify-between gap-3 border-t border-divider pt-4 text-left disabled:opacity-60"
+            >
+              <span class="flex flex-col gap-0.5">
+                <span class="text-[15px] font-semibold">Export data</span>
+                <span
+                  class="text-[13px] text-muted"
+                  x-text="exporting ? 'Preparing your file…' : 'All habits and their history as a CSV file.'"
+                ></span>
+              </span>
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                class="shrink-0 text-muted"
+              >
+                <path d="M12 4v11M7 11l5 5 5-5M5 20h14" />
+              </svg>
+            </button>
+
+            <div class="flex flex-col gap-3 border-t border-divider pt-4">
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                class="sr-only"
+                tabindex="-1"
+                aria-hidden="true"
+                x-ref="importFile"
+                @change="readImportFile($event.target.files[0]); $event.target.value = ''"
+              />
+              <button
+                type="button"
+                @click="$refs.importFile.click()"
+                :disabled="importStage === 'saving'"
+                class="flex min-h-10 w-full items-center justify-between gap-3 text-left disabled:opacity-60"
+              >
+                <span class="flex flex-col gap-0.5">
+                  <span class="text-[15px] font-semibold">Import data</span>
+                  <span class="text-[13px] text-muted"
+                    >Add habits and history from a CSV file.</span
+                  >
+                </span>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  class="shrink-0 text-muted"
+                >
+                  <path d="M12 16V5M7 9l5-5 5 5M5 20h14" />
+                </svg>
+              </button>
+
+              <div
+                x-show="importError"
+                x-cloak
+                class="alert alert-error"
+                role="alert"
+                x-text="importError"
+              ></div>
+
+              <div
+                x-show="importStage === 'done'"
+                x-cloak
+                class="alert alert-success"
+                role="status"
+                x-text="importResult"
+              ></div>
+
+              <div
+                x-show="importStage === 'preview' || importStage === 'saving'"
+                x-cloak
+                class="flex flex-col gap-3 rounded-xl border border-line bg-canvas p-4"
+                aria-labelledby="import-preview-title"
+              >
+                <div>
+                  <h3
+                    id="import-preview-title"
+                    class="text-[15px] font-semibold"
+                  >
+                    Import
+                    <span class="break-all" x-text="importFileName"></span>?
+                  </h3>
+                  <p class="text-[13px] text-muted">
+                    Importing only adds. Habits are matched by name and nothing
+                    is changed or deleted.
+                  </p>
+                </div>
+                <ul class="flex list-disc flex-col gap-1 pl-5 text-[15px]">
+                  <template x-for="line in importSummary()" :key="line">
+                    <li x-text="line"></li>
+                  </template>
+                </ul>
+                <ul
+                  x-show="importPlan?.problems.length"
+                  class="flex flex-col gap-0.5 text-[13px] text-muted"
+                >
+                  <template
+                    x-for="line in importPlan?.problems ?? []"
+                    :key="line"
+                  >
+                    <li x-text="line"></li>
+                  </template>
+                </ul>
+                <p
+                  x-show="importStage === 'saving'"
+                  class="text-[15px] font-semibold text-primary"
+                  role="status"
+                  x-text="importProgress"
+                ></p>
+                <div
+                  x-show="importStage === 'preview'"
+                  class="flex flex-wrap gap-2.5"
+                >
+                  <button
+                    type="button"
+                    class="btn btn-primary"
+                    @click="confirmImport()"
+                    :disabled="!importHasChanges"
+                  >
+                    Import
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-secondary"
+                    @click="cancelImport()"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section
+            class="card flex flex-col gap-3.5 p-5 sm:p-6"
+            aria-labelledby="delete-heading"
+          >
+            <div>
+              <h2 id="delete-heading" class="text-xl font-bold">
+                Delete account
+              </h2>
+              <p class="text-[15px] leading-snug text-muted">
+                Removes your account, habits and history for good, and logs you
+                out.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="btn btn-danger self-start"
+              @click="confirmDelete = true"
+              x-show="!confirmDelete"
+            >
+              Delete account
+            </button>
+            <div
+              x-show="confirmDelete"
+              x-cloak
+              role="alertdialog"
+              aria-labelledby="delete-confirm-text"
+              class="flex flex-col gap-3 rounded-xl border-2 border-danger p-4"
+            >
+              <span
+                id="delete-confirm-text"
+                class="text-[15px] leading-snug font-semibold"
+                >Delete your account? All your habits and their history will be
+                lost.</span
+              >
+              <div class="flex flex-wrap gap-2.5">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  @click="confirmDelete = false"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger-solid btn-sm"
+                  :disabled="loading"
+                  @click="deleteAccount()"
+                >
+                  Delete account
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <p class="text-center text-[13px] text-faint">Habits %APP_VERSION%</p>
+    </main>
+  </body>
+</html>

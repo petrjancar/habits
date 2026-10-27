@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+.npm/
+.vite/
+coverage/
+dist/
+
+# Env
+.env
+.env.local
+*.local
+
+# Your compose file holds your admin password; the README has a template.
+docker-compose.yml
+docker-compose.override.yml
+
+# PocketBase 
+pocketbase
+pocketbase.exe
+pb_data/
+pb_public/

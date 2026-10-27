@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <load src="/components/head.html" />
+    <title>Log in · Habits</title>
+    <!-- blocking="render": the browser keeps showing the previous page until
+         this page is fully built, so nothing appears half-drawn. -->
+    <script type="module" src="/src/login.js" blocking="render"></script>
+  </head>
+  <body class="min-h-dvh lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+    <load src="/components/auth-panel.html" />
+
+    <main class="flex items-center justify-center px-6 py-11 sm:px-10 lg:py-12">
+      <div class="w-full max-w-sm" x-data="loginComponent">
+        <h1 class="page-title">Log in</h1>
+        <p class="mt-2.5 text-[17px] leading-relaxed text-muted">
+          Use the email and password of your account on this server.
+        </p>
+
+        <div class="mt-8">
+          <template x-if="infoMessage">
+            <div
+              class="alert alert-success mb-6"
+              x-text="infoMessage"
+              role="status"
+            ></div>
+          </template>
+          <template x-if="errorMessage">
+            <div
+              class="alert alert-error mb-6"
+              x-text="errorMessage"
+              role="alert"
+            ></div>
+          </template>
+        </div>
+
+        <form @submit.prevent="submit" class="space-y-5">
+          <div>
+            <label for="login-identity" class="label">Email</label>
+            <input
+              id="login-identity"
+              name="email"
+              type="email"
+              autocomplete="username"
+              spellcheck="false"
+              x-model="identity"
+              required
+              class="input"
+              placeholder="you@example.com"
+            />
+          </div>
+
+          <div>
+            <label for="login-password" class="label">Password</label>
+            <div class="relative" x-data="passwordField">
+              <input
+                id="login-password"
+                name="current-password"
+                type="password"
+                :type="visible ? 'text' : 'password'"
+                autocomplete="current-password"
+                enterkeyhint="done"
+                x-model="password"
+                required
+                class="input"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                @click="toggle()"
+                :aria-pressed="visible.toString()"
+                aria-controls="login-password"
+                aria-label="Show password"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path x-show="visible" x-cloak d="M3 3l18 18" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            :disabled="loading"
+            class="btn btn-primary w-full"
+          >
+            <span x-show="!loading">Log in</span>
+            <span x-show="loading" x-cloak>Logging in...</span>
+          </button>
+        </form>
+
+        <p class="mt-8 text-sm text-muted">
+          No account yet?
+          <a href="/register/" class="link ml-1">Create one</a>
+        </p>
+      </div>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,730 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <load src="/components/head.html" />
+    <title>Manage habits · Habits</title>
+    <!-- blocking="render": the browser keeps showing the previous page until
+         this page is fully built, so nothing appears half-drawn. -->
+    <script type="module" src="/src/habits.js" blocking="render"></script>
+  </head>
+  <body class="min-h-dvh">
+    <load src="/components/nav.html" active="habits" />
+
+    <main class="page" x-data="habitsComponent">
+      <div
+        class="flex flex-wrap items-end justify-between gap-4"
+        :class="selectedId && 'max-md:hidden'"
+      >
+        <div>
+          <h1 class="page-title">Habits</h1>
+          <p class="page-subtitle">
+            Pick a habit to edit it or see its history.
+          </p>
+        </div>
+        <button type="button" class="btn btn-primary" @click="openNew()">
+          <load src="/components/plus-icon.html" />
+          Add habit
+        </button>
+      </div>
+
+      <div
+        x-show="error"
+        x-cloak
+        class="alert alert-error"
+        role="alert"
+        x-text="error"
+      ></div>
+
+      <section
+        x-show="!loading && !active.length && !archived.length"
+        x-cloak
+        class="card p-6 text-muted sm:p-8"
+      >
+        No habits yet. Add your first one to get started.
+      </section>
+
+      <div x-show="!loading" x-cloak class="flex flex-wrap items-start gap-6">
+        <!-- List -->
+        <section
+          aria-label="Your habits"
+          class="min-w-0 flex-[1_1_320px] flex-col gap-3 md:max-w-[400px]"
+          :class="selectedId ? 'hidden md:flex' : 'flex'"
+        >
+          <div x-show="active.length" class="flex flex-col gap-1.5">
+            <div x-ref="list" class="card flex flex-col overflow-hidden">
+              <template x-for="row in active" :key="row.id">
+                <div
+                  :data-id="row.id"
+                  class="flex items-center bg-surface"
+                  :class="[row.first ? '' : 'border-t border-divider', row.selected ? 'bg-selected!' : '']"
+                >
+                  <span
+                    class="drag-handle flex h-[72px] w-10 shrink-0 cursor-grab touch-none items-center justify-center text-faint active:cursor-grabbing"
+                    title="Drag to reorder"
+                    aria-hidden="true"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="20"
+                      height="20"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                    >
+                      <path
+                        d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"
+                      />
+                    </svg>
+                  </span>
+                  <button
+                    type="button"
+                    @click="select(row.id)"
+                    @keydown="moveWithKeys($event, row.id)"
+                    :aria-current="row.selected ? 'true' : null"
+                    class="flex min-h-[72px] min-w-0 flex-1 items-center gap-3 py-2.5 pr-4 text-left"
+                  >
+                    <span
+                      class="size-3.5 shrink-0 rounded-full"
+                      :style="{ background: row.color }"
+                    ></span>
+                    <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span
+                        class="truncate text-base"
+                        :class="row.selected ? 'font-bold' : 'font-semibold'"
+                        x-text="row.name"
+                      ></span>
+                      <span
+                        class="truncate text-[13px] text-muted"
+                        x-text="row.sub"
+                      ></span>
+                    </span>
+                    <span
+                      class="flex shrink-0 items-center gap-1 text-[13px] font-semibold"
+                      :class="row.streak ? 'text-primary' : 'text-muted'"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="16"
+                        height="16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                        :class="row.streak ? 'text-lamp' : 'text-faint'"
+                      >
+                        <path
+                          d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2.2 1.2.8 2 1.6 2.4C10.2 8.4 10.8 5.2 12 3z"
+                        />
+                      </svg>
+                      <span x-text="row.streakText"></span>
+                    </span>
+                  </button>
+                </div>
+              </template>
+            </div>
+            <p class="px-1 text-[13px] text-muted">
+              Drag the handle to change the order (or Alt + arrow keys).
+            </p>
+          </div>
+
+          <div x-show="archived.length" class="flex flex-col gap-2">
+            <button
+              type="button"
+              @click="archiveOpen = !archiveOpen"
+              :aria-expanded="archiveOpen.toString()"
+              class="flex min-h-12 w-full items-center justify-between px-1 text-left"
+            >
+              <span
+                class="text-[15px] font-semibold"
+                x-text="`Archived (${archived.length})`"
+              ></span>
+              <svg
+                viewBox="0 0 24 24"
+                width="20"
+                height="20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+                class="text-muted transition-transform"
+                :class="archiveOpen && 'rotate-180'"
+              >
+                <path d="M6 9l6 6 6-6" />
+              </svg>
+            </button>
+            <div x-show="archiveOpen" class="flex flex-col gap-2">
+              <div class="card flex flex-col overflow-hidden">
+                <template x-for="row in archived" :key="row.id">
+                  <button
+                    type="button"
+                    @click="select(row.id)"
+                    :aria-current="row.selected ? 'true' : null"
+                    class="flex min-h-16 flex-col justify-center gap-0.5 px-4 py-2.5 text-left"
+                    :class="[row.first ? '' : 'border-t border-divider', row.selected ? 'bg-selected' : '']"
+                  >
+                    <span
+                      class="text-base font-semibold text-muted"
+                      x-text="row.name"
+                    ></span>
+                    <span
+                      class="text-[13px] text-muted"
+                      x-text="row.sub"
+                    ></span>
+                  </button>
+                </template>
+              </div>
+              <p class="mx-1 text-[13px] leading-snug text-muted">
+                Archived habits are hidden from Today but stay in your
+                statistics. Restore one from its details.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- Detail -->
+        <template x-if="detail">
+          <section
+            aria-label="Habit details"
+            class="card min-w-0 flex-[2_1_520px] flex-col gap-5 p-5 sm:p-6"
+            :class="selectedId ? 'flex' : 'hidden md:flex'"
+          >
+            <button
+              type="button"
+              @click="back()"
+              class="-mt-1 -ml-2 flex min-h-11 items-center gap-1 self-start rounded-full pr-3 pl-1 text-[15px] font-semibold text-primary md:hidden"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M15 6l-6 6 6 6" />
+              </svg>
+              All habits
+            </button>
+
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="flex min-w-0 items-start gap-3">
+                <span
+                  class="mt-2.5 size-4 shrink-0 rounded-full"
+                  :style="{ background: detail.color }"
+                ></span>
+                <div class="min-w-0">
+                  <h2
+                    class="text-[30px] leading-tight font-bold tracking-[-0.02em] break-words"
+                    x-text="detail.name"
+                  ></h2>
+                  <span
+                    class="text-[15px] text-muted"
+                    x-text="detail.sub"
+                  ></span>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm"
+                @click="openEdit()"
+              >
+                Edit
+              </button>
+            </div>
+
+            <div
+              x-show="detail.paused"
+              role="status"
+              class="rounded-xl border border-lamp bg-note px-4 py-3 text-sm leading-snug text-on-note"
+            >
+              This habit is paused. Its streak is kept, and it's hidden from
+              Today until you resume it.
+            </div>
+            <div
+              x-show="detail.archived"
+              role="status"
+              class="rounded-xl border border-line bg-canvas px-4 py-3 text-sm leading-snug text-muted"
+              x-text="`${detail.archivedText} It's hidden from Today but still counts in your statistics.`"
+            ></div>
+
+            <div class="grid grid-cols-3 gap-2 sm:gap-3">
+              <section
+                aria-label="Current streak"
+                class="flex flex-col gap-1 rounded-xl bg-canvas px-3 py-3.5 sm:px-4"
+              >
+                <span class="text-[13px] font-semibold text-muted">Streak</span>
+                <span
+                  class="text-xl leading-tight font-bold text-primary sm:text-[26px]"
+                  x-text="detail.streakText"
+                ></span>
+              </section>
+              <section
+                aria-label="Longest streak"
+                class="flex flex-col gap-1 rounded-xl bg-canvas px-3 py-3.5 sm:px-4"
+              >
+                <span class="text-[13px] font-semibold text-muted"
+                  >Longest</span
+                >
+                <span
+                  class="text-xl leading-tight font-bold sm:text-[26px]"
+                  x-text="detail.longestText"
+                ></span>
+              </section>
+              <section
+                :aria-label="`Success rate in ${detail.monthName}`"
+                class="flex flex-col gap-1 rounded-xl bg-canvas px-3 py-3.5 sm:px-4"
+              >
+                <span
+                  class="text-[13px] font-semibold text-muted"
+                  x-text="detail.monthName"
+                ></span>
+                <span
+                  class="text-xl leading-tight font-bold sm:text-[26px]"
+                  x-text="detail.pctText"
+                ></span>
+              </section>
+            </div>
+
+            <section aria-label="Calendar" class="flex flex-col gap-3">
+              <div class="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  class="btn-icon disabled:opacity-30"
+                  @click="shiftMonth(-1)"
+                  :disabled="!detail.canPrev"
+                  aria-label="Previous month"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M15 6l-6 6 6 6" />
+                  </svg>
+                </button>
+                <div class="text-center">
+                  <h3
+                    class="text-[17px] font-bold"
+                    x-text="detail.monthTitle"
+                  ></h3>
+                  <span class="text-[13px] text-muted"
+                    >Tap a day to change it.</span
+                  >
+                </div>
+                <button
+                  type="button"
+                  class="btn-icon disabled:opacity-30"
+                  @click="shiftMonth(1)"
+                  :disabled="!detail.canNext"
+                  aria-label="Next month"
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="20"
+                    height="20"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </div>
+              <div
+                class="grid grid-cols-7 gap-1.5 text-center"
+                aria-hidden="true"
+              >
+                <template x-for="d in detail.weekdays" :key="d">
+                  <span
+                    class="text-[13px] font-semibold text-muted"
+                    x-text="d"
+                  ></span>
+                </template>
+              </div>
+              <div class="grid grid-cols-7 gap-1.5">
+                <template x-for="cell in detail.cells" :key="cell.key">
+                  <button
+                    type="button"
+                    @click="toggleDay(cell)"
+                    :disabled="!cell.clickable"
+                    :aria-hidden="cell.blank ? 'true' : null"
+                    :tabindex="cell.blank ? -1 : null"
+                    :aria-label="cell.blank ? null : cell.aria"
+                    :aria-pressed="cell.clickable ? cell.done.toString() : null"
+                    class="h-11 w-full rounded-full text-[15px] font-semibold transition-colors sm:h-12"
+                    :class="{
+                      invisible: cell.blank,
+                      'bg-missed text-on-missed': cell.state === 'missed',
+                      'border border-line bg-surface text-ink': cell.state === 'open',
+                      'bg-canvas text-muted': cell.state === 'off',
+                      'text-muted/60': cell.state === 'future',
+                      'ring-2 ring-primary ring-inset': cell.isToday,
+                    }"
+                    :style="cell.style"
+                    x-text="cell.num"
+                  ></button>
+                </template>
+              </div>
+              <div
+                class="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] text-muted"
+              >
+                <span class="flex items-center gap-1.5"
+                  ><span
+                    class="size-3 rounded-full"
+                    :style="{ background: detail.color }"
+                  ></span
+                  >done</span
+                >
+                <span x-show="!detail.weekly" class="flex items-center gap-1.5"
+                  ><span class="size-3 rounded-full bg-missed"></span
+                  >missed</span
+                >
+                <span class="flex items-center gap-1.5"
+                  ><span
+                    class="size-3 rounded-full bg-canvas ring-1 ring-line"
+                  ></span
+                  >not scheduled</span
+                >
+              </div>
+            </section>
+
+            <section
+              x-show="detail.note"
+              aria-label="Note"
+              class="flex flex-col gap-1.5 border-t border-divider pt-4"
+            >
+              <span class="text-[13px] font-semibold text-muted">My note</span>
+              <p
+                class="text-base leading-normal whitespace-pre-line"
+                x-text="detail.note"
+              ></p>
+            </section>
+
+            <section
+              aria-label="More actions"
+              class="flex flex-col gap-3 border-t border-divider pt-4"
+            >
+              <div class="flex flex-wrap items-center gap-2.5">
+                <button
+                  type="button"
+                  x-show="!detail.archived"
+                  class="btn btn-secondary btn-sm"
+                  :disabled="busy"
+                  @click="togglePause()"
+                  x-text="detail.paused ? 'Resume habit' : 'Pause habit'"
+                ></button>
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm"
+                  :disabled="busy"
+                  @click="toggleArchive()"
+                  x-text="detail.archived ? 'Restore habit' : 'Archive'"
+                ></button>
+                <button
+                  type="button"
+                  class="btn btn-quiet btn-sm text-danger! hover:bg-danger-soft"
+                  :disabled="busy"
+                  @click="confirmDelete = true"
+                >
+                  Delete permanently
+                </button>
+              </div>
+              <span class="text-[13px] leading-snug text-muted"
+                >Pausing keeps the streak. Archiving hides the habit from Today
+                but keeps it in your statistics.</span
+              >
+              <div
+                x-show="confirmDelete"
+                role="alertdialog"
+                aria-label="Confirm deletion"
+                class="flex flex-col gap-3 rounded-xl border-2 border-danger p-4"
+              >
+                <span
+                  class="text-[15px] leading-snug font-semibold"
+                  x-text="`Delete “${detail.name}” for good? Its whole history and statistics will be lost.`"
+                ></span>
+                <div class="flex gap-2.5">
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm"
+                    @click="confirmDelete = false"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    class="btn btn-danger-solid btn-sm"
+                    :disabled="busy"
+                    @click="deleteHabit()"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
+            </section>
+          </section>
+        </template>
+      </div>
+
+      <!-- Add / edit dialog -->
+      <dialog
+        x-ref="dialog"
+        class="sheet"
+        aria-labelledby="habit-form-title"
+        @close="formErrors = {}"
+      >
+        <form
+          @submit.prevent="saveForm()"
+          class="flex min-h-full flex-col gap-4 p-5 sm:min-h-0 sm:p-6"
+          novalidate
+        >
+          <div class="flex items-center justify-between gap-3">
+            <h2
+              id="habit-form-title"
+              class="text-2xl font-bold tracking-[-0.01em]"
+              x-text="form.mode === 'edit' ? 'Edit habit' : 'New habit'"
+            ></h2>
+            <button
+              type="button"
+              class="btn-icon"
+              @click="closeForm()"
+              aria-label="Close"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="22"
+                height="22"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M6 6l12 12M18 6L6 18" />
+              </svg>
+            </button>
+          </div>
+
+          <div
+            x-show="formError"
+            class="alert alert-error"
+            role="alert"
+            x-text="formError"
+          ></div>
+
+          <div>
+            <label for="habit-name" class="label">Name</label>
+            <input
+              id="habit-name"
+              autofocus
+              type="text"
+              class="input"
+              maxlength="80"
+              autocomplete="off"
+              placeholder="e.g. Read 20 minutes"
+              x-model="form.name"
+              :aria-invalid="!!formErrors.name"
+              aria-describedby="habit-name-error"
+            />
+            <p
+              id="habit-name-error"
+              class="field-error"
+              x-show="formErrors.name"
+              x-text="formErrors.name"
+            ></p>
+          </div>
+
+          <div>
+            <span id="habit-color-label" class="label">Color</span>
+            <div
+              role="radiogroup"
+              aria-labelledby="habit-color-label"
+              class="flex flex-wrap gap-2.5"
+            >
+              <template x-for="c in colors" :key="c.key">
+                <button
+                  type="button"
+                  role="radio"
+                  :aria-checked="(form.color === c.key).toString()"
+                  :aria-label="c.label"
+                  @click="form.color = c.key"
+                  class="grid size-12 place-items-center rounded-full border-2"
+                  :class="form.color === c.key ? 'border-primary' : 'border-transparent'"
+                >
+                  <span
+                    class="grid size-[34px] place-items-center rounded-full"
+                    :style="{ background: c.bg, color: c.fg }"
+                  >
+                    <svg
+                      x-show="form.color === c.key"
+                      viewBox="0 0 24 24"
+                      width="18"
+                      height="18"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="3"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      aria-hidden="true"
+                    >
+                      <path d="M5 12.5l4.5 4.5L19 7.5" />
+                    </svg>
+                  </span>
+                </button>
+              </template>
+            </div>
+          </div>
+
+          <div class="flex flex-col gap-2.5">
+            <span id="habit-frequency-label" class="label mb-0">How often</span>
+            <div
+              role="group"
+              aria-labelledby="habit-frequency-label"
+              class="segmented"
+            >
+              <template x-for="f in frequencies" :key="f.key">
+                <button
+                  type="button"
+                  class="segment"
+                  @click="form.frequency = f.key"
+                  :aria-pressed="(form.frequency === f.key).toString()"
+                  x-text="f.label"
+                ></button>
+              </template>
+            </div>
+
+            <div
+              x-show="form.frequency === 'days'"
+              role="group"
+              aria-label="Days of the week"
+              class="flex gap-1.5"
+            >
+              <template x-for="d in formDays()" :key="d.index">
+                <button
+                  type="button"
+                  @click="form.days[d.index] = !form.days[d.index]"
+                  :aria-pressed="form.days[d.index].toString()"
+                  class="min-h-12 min-w-0 flex-1 rounded-full border text-sm font-semibold transition-colors"
+                  :class="form.days[d.index] ? 'border-primary bg-primary text-on-primary' : 'border-line bg-surface text-ink'"
+                  x-text="d.label"
+                ></button>
+              </template>
+            </div>
+            <p
+              class="field-error mt-0"
+              x-show="formErrors.days"
+              x-text="formErrors.days"
+            ></p>
+
+            <div
+              x-show="form.frequency === 'weekly'"
+              class="flex items-center justify-between rounded-xl border border-line bg-surface p-1.5"
+            >
+              <button
+                type="button"
+                class="btn-icon size-12 bg-canvas"
+                @click="setTarget(-1)"
+                :disabled="form.target <= 1"
+                aria-label="One time fewer"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M5 12h14" />
+                </svg>
+              </button>
+              <span
+                class="text-lg font-bold"
+                aria-live="polite"
+                x-text="`${form.target}× a week`"
+              ></span>
+              <button
+                type="button"
+                class="btn-icon size-12 bg-canvas"
+                @click="setTarget(1)"
+                :disabled="form.target >= 7"
+                aria-label="One time more"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2.2"
+                  stroke-linecap="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 5v14M5 12h14" />
+                </svg>
+              </button>
+            </div>
+            <p class="text-[13px] leading-snug text-muted">
+              <span x-text="frequencyHint()"></span>
+              <span x-show="form.mode === 'edit'">
+                Schedule changes also apply to past days in your
+                statistics.</span
+              >
+            </p>
+          </div>
+
+          <div>
+            <label for="habit-note" class="label"
+              >Note
+              <span class="font-normal text-muted">(optional)</span></label
+            >
+            <textarea
+              id="habit-note"
+              rows="2"
+              maxlength="1000"
+              class="input resize-none"
+              placeholder="Why do I want to do this?"
+              x-model="form.note"
+            ></textarea>
+          </div>
+
+          <div
+            class="sticky bottom-0 z-10 -mx-5 mt-auto -mb-5 flex flex-wrap justify-end gap-2.5 border-t border-divider bg-canvas px-5 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:-mx-6 sm:-mb-6 sm:px-6"
+          >
+            <button
+              type="button"
+              class="btn btn-secondary"
+              @click="closeForm()"
+            >
+              Cancel
+            </button>
+            <button type="submit" class="btn btn-primary" :disabled="saving">
+              <span
+                x-text="saving ? 'Saving…' : form.mode === 'edit' ? 'Save changes' : 'Save habit'"
+              ></span>
+            </button>
+          </div>
+        </form>
+      </dialog>
+    </main>
+  </body>
+</html>

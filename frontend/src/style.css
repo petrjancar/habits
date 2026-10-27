@@ -1,0 +1,437 @@
+@import "tailwindcss";
+@import "@fontsource-variable/hanken-grotesk";
+
+/*
+ * Design tokens. Every color used by the UI comes from here.
+ * Dark-mode values are set further down; they apply when the user picks
+ * "Dark", or picks "System" and the device is in dark mode.
+ */
+@theme static {
+  --font-sans: "Hanken Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+
+  --color-canvas: #eef1ee; /* page background */
+  --color-surface: #ffffff; /* cards, inputs */
+  --color-ink: #1c2b27; /* main text */
+  --color-muted: #56655f; /* secondary text */
+  --color-faint: #7d8c85; /* drag handles, inactive icons */
+  --color-line: #d3dad6; /* borders */
+  --color-divider: #e4e9e5; /* rows inside cards */
+  --color-track: #dde3df; /* progress tracks, segmented controls */
+  --color-selected: #e7ede9; /* selected list row */
+
+  --color-primary: #1f4d44; /* pine: buttons, links */
+  --color-primary-hover: #173a33;
+  --color-on-primary: #ffffff;
+  --color-focus: #1f4d44;
+
+  --color-lamp: #e8b33a; /* accent: progress, streak flame, avatar */
+  --color-on-lamp: #1c2b27;
+
+  --color-panel: #1f4d44; /* brand panel on login/register, insight card */
+  --color-panel-tile: #2c584f;
+  --color-panel-ink: #ffffff;
+  --color-panel-muted: #9fbab1;
+
+  --color-bar: #9db8b0; /* chart bars */
+  --color-missed: #f6e0db;
+  --color-on-missed: #8f2a1b;
+  --color-note: #f7ebc7; /* paused notice */
+  --color-on-note: #4a3600;
+
+  --color-danger: #b42318;
+  --color-danger-soft: #fdecea;
+  --color-success: #1d6b45;
+  --color-success-soft: #e2f2e9;
+
+  /* Heatmap, from nothing done (0) to everything done (4). */
+  --color-heat-0: #e3e8e4;
+  --color-heat-1: #f6e7b8;
+  --color-heat-2: #f0d17c;
+  --color-heat-3: #e8b33a;
+  --color-heat-4: #c48a12;
+
+  /* Habit colors (habit.color) and the text/icon color on top of them. */
+  --color-habit-pine: #1f4d44;
+  --color-on-habit-pine: #ffffff;
+  --color-habit-emerald: #3e7a6b;
+  --color-on-habit-emerald: #ffffff;
+  --color-habit-sage: #8fb0a3;
+  --color-on-habit-sage: #1c2b27;
+  --color-habit-yellow: #e8b33a;
+  --color-on-habit-yellow: #1c2b27;
+  --color-habit-ochre: #c48a12;
+  --color-on-habit-ochre: #1c2b27;
+  --color-habit-brick: #b4573b;
+  --color-on-habit-brick: #ffffff;
+  --color-habit-blue: #3b6fa0;
+  --color-on-habit-blue: #ffffff;
+  --color-habit-plum: #7a4e86;
+  --color-on-habit-plum: #ffffff;
+}
+
+/* Dark values, written once and applied by the two selectors below. */
+@utility dark-tokens {
+  --color-canvas: #101816;
+  --color-surface: #18221f;
+  --color-ink: #e4ebe7;
+  --color-muted: #94a49e;
+  --color-faint: #6f7f78;
+  --color-line: #2b3834;
+  --color-divider: #24302c;
+  --color-track: #26332f;
+  --color-selected: #22302c;
+
+  --color-primary: #edbe4e;
+  --color-primary-hover: #f5cd6c;
+  --color-on-primary: #13201c;
+  --color-focus: #edbe4e;
+
+  --color-lamp: #edbe4e;
+  --color-on-lamp: #13201c;
+
+  --color-panel: #15302a;
+  --color-panel-tile: #1f4038;
+  --color-panel-ink: #e4ebe7;
+  --color-panel-muted: #8fada3;
+
+  --color-bar: #3f5f56;
+  --color-missed: #3a2320;
+  --color-on-missed: #f0a597;
+  --color-note: #3a3018;
+  --color-on-note: #f5d98a;
+
+  --color-danger: #f0857a;
+  --color-danger-soft: #2e1a18;
+  --color-success: #7cd3a4;
+  --color-success-soft: #14271e;
+
+  --color-heat-0: #24302c;
+  --color-heat-1: #4a4024;
+  --color-heat-2: #7a6328;
+  --color-heat-3: #b58a2c;
+  --color-heat-4: #edbe4e;
+
+  --color-habit-pine: #6fa595;
+  --color-habit-emerald: #3e8e78;
+  --color-habit-sage: #9dbdb0;
+  --color-habit-yellow: #e8b33a;
+  --color-habit-ochre: #d69a2a;
+  --color-habit-brick: #d47a60;
+  --color-habit-blue: #7fa7d6;
+  --color-habit-plum: #b58bc2;
+  --color-on-habit-pine: #13201c;
+  --color-on-habit-emerald: #13201c;
+  --color-on-habit-sage: #13201c;
+  --color-on-habit-yellow: #13201c;
+  --color-on-habit-ochre: #13201c;
+  --color-on-habit-brick: #13201c;
+  --color-on-habit-blue: #13201c;
+  --color-on-habit-plum: #13201c;
+
+  color-scheme: dark;
+}
+
+@layer base {
+  :root[data-theme="dark"] {
+    @apply dark-tokens;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      @apply dark-tokens;
+    }
+  }
+
+  html {
+    color-scheme: light;
+    /* Always keep room for the scrollbar, so the layout doesn't move
+       sideways between pages that scroll and pages that don't. */
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-canvas font-sans text-ink antialiased;
+  }
+
+  /* Alpine removes x-cloak once it has initialised the element. */
+  [x-cloak] {
+    display: none !important;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/*
+ * Shared component classes. Use these for recurring elements instead of
+ * repeating long utility strings; add utilities next to them for one-off
+ * tweaks (utilities override component classes).
+ */
+@layer components {
+  .page {
+    @apply mx-auto flex w-full max-w-[1080px] flex-col gap-7 px-4 pt-8 pb-28 sm:px-6 md:pt-10 md:pb-14;
+  }
+
+  .page-title {
+    @apply min-h-[1.25em] text-[32px] leading-tight font-bold tracking-[-0.02em] md:text-[38px];
+  }
+
+  .page-subtitle {
+    @apply mt-1.5 min-h-[1.5em] text-[17px] leading-normal text-muted;
+  }
+
+  .card {
+    @apply rounded-2xl border border-line bg-surface;
+  }
+
+  .card-title {
+    @apply text-lg font-bold;
+  }
+
+  .label {
+    @apply mb-2 block text-sm font-semibold text-ink;
+  }
+
+  .input {
+    @apply min-h-13 w-full rounded-xl border border-line bg-surface px-4 text-base text-ink transition-colors placeholder:text-muted/70 hover:border-muted/50 focus:border-primary focus:ring-4 focus:ring-primary/15 focus:outline-none;
+  }
+
+  textarea.input {
+    @apply py-3.5 leading-snug;
+  }
+
+  .input:disabled,
+  .input[readonly] {
+    @apply cursor-default bg-canvas text-muted hover:border-line focus:border-line focus:ring-0;
+  }
+
+  .input[aria-invalid="true"] {
+    @apply border-danger focus:ring-danger/15;
+  }
+
+  /* Leave room for the show/hide button inside password inputs. */
+  .input:has(+ .password-toggle) {
+    @apply pr-14;
+  }
+
+  .password-toggle {
+    @apply absolute inset-y-0 right-1 my-auto flex size-11 items-center justify-center rounded-[10px] text-muted transition-colors hover:text-ink;
+  }
+
+  .field-error {
+    @apply mt-1.5 text-sm text-danger;
+  }
+
+  .field-hint {
+    @apply mt-1.5 text-sm text-muted;
+  }
+
+  .btn {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-full px-6 text-base font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .btn-sm {
+    @apply min-h-11 px-5 text-[15px];
+  }
+
+  .btn-primary {
+    @apply bg-primary text-on-primary hover:bg-primary-hover;
+  }
+
+  .btn-outline {
+    @apply border border-primary text-primary hover:bg-primary/[0.06];
+  }
+
+  .btn-secondary {
+    @apply border border-line bg-surface font-semibold text-ink hover:border-muted/50;
+  }
+
+  .btn-quiet {
+    @apply font-medium text-muted hover:bg-ink/[0.06] hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply border border-danger text-danger hover:bg-danger hover:text-surface;
+  }
+
+  .btn-danger-solid {
+    @apply bg-danger text-surface hover:opacity-90;
+  }
+
+  .btn-icon {
+    @apply inline-flex size-11 shrink-0 items-center justify-center rounded-full text-ink transition-colors hover:bg-ink/[0.06];
+  }
+
+  .alert {
+    @apply rounded-xl border-l-4 px-4 py-3 text-sm;
+  }
+
+  .alert-error {
+    @apply border-danger bg-danger-soft text-danger;
+  }
+
+  .alert-success {
+    @apply border-success bg-success-soft text-success;
+  }
+
+  .link {
+    @apply font-bold text-primary underline decoration-primary/40 underline-offset-4 transition-colors hover:decoration-primary;
+  }
+
+  .avatar {
+    @apply grid shrink-0 place-items-center rounded-full bg-lamp font-bold text-on-lamp;
+  }
+
+  /* Segmented control: a row of buttons with aria-pressed. */
+  .segmented {
+    @apply flex gap-1 rounded-full bg-track p-1;
+  }
+
+  .segment {
+    @apply min-h-11 flex-1 rounded-full px-3 text-[15px] font-semibold text-muted transition-colors hover:text-ink aria-pressed:bg-primary aria-pressed:text-on-primary;
+  }
+
+  /* Header navigation pill. */
+  .nav-pill {
+    @apply flex min-h-11 items-center rounded-full border border-transparent px-[18px] text-[15px] font-medium text-muted transition-colors hover:text-ink;
+  }
+
+  /*
+   * The current page comes from the page's HTML (<load ... active="stats">),
+   * so the right tab is highlighted before any JavaScript runs.
+   */
+  [data-active="today"] .nav-pill[data-nav="today"],
+  [data-active="stats"] .nav-pill[data-nav="stats"],
+  [data-active="habits"] .nav-pill[data-nav="habits"] {
+    @apply border-line bg-surface font-bold text-ink;
+  }
+
+  [data-active="today"] .tab[data-nav="today"],
+  [data-active="stats"] .tab[data-nav="stats"],
+  [data-active="habits"] .tab[data-nav="habits"] {
+    @apply text-primary;
+  }
+
+  [data-active="account"] .nav-avatar {
+    @apply ring-2 ring-primary ring-offset-2 ring-offset-canvas;
+  }
+
+  /* Bottom tab bar item on phones. */
+  .tab {
+    @apply flex min-h-14 flex-1 flex-col items-center justify-center gap-1 text-xs font-semibold text-muted;
+  }
+
+  .stat-label {
+    @apply text-sm font-semibold text-muted;
+  }
+
+  .stat-value {
+    @apply text-[34px] leading-[1.1] font-bold tracking-[-0.02em] sm:text-[44px];
+  }
+
+  .progress {
+    @apply h-2.5 overflow-hidden rounded-full bg-track;
+  }
+
+  .progress > span {
+    @apply block h-full rounded-full bg-lamp transition-[width] duration-300;
+  }
+
+  .heat-0 {
+    background: var(--color-heat-0);
+  }
+  .heat-1 {
+    background: var(--color-heat-1);
+  }
+  .heat-2 {
+    background: var(--color-heat-2);
+  }
+  .heat-3 {
+    background: var(--color-heat-3);
+  }
+  .heat-4 {
+    background: var(--color-heat-4);
+  }
+
+  /* Dialogs: centred card on larger screens, full screen on phones. */
+  .sheet {
+    @apply m-0 h-dvh max-h-none w-full max-w-none bg-canvas p-0 text-ink sm:m-auto sm:h-fit sm:max-h-[calc(100dvh-48px)] sm:max-w-[520px] sm:rounded-[20px] sm:shadow-2xl;
+  }
+
+  /* Still scrolls when it doesn't fit, just without a visible scrollbar. */
+  .sheet {
+    scrollbar-width: none;
+  }
+
+  .sheet::-webkit-scrollbar {
+    display: none;
+  }
+
+  .sheet::backdrop {
+    background: rgb(28 43 39 / 0.5);
+  }
+
+  /* Brand art on the login/register panel. */
+  .heat-art-cell {
+    background: var(--color-panel-tile);
+  }
+
+  .heat-art-cell.lit {
+    animation: heat-glow 9s ease-in-out infinite both;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .heat-art-cell.lit {
+      animation: none;
+      background: var(--lit);
+    }
+  }
+}
+
+/*
+ * Page changes cross-fade (Chrome, Edge, Safari), and the header and tab bar
+ * stay still. Browsers without support simply switch pages as before.
+ */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-group(root) {
+  animation-duration: 120ms;
+}
+
+.site-header {
+  view-transition-name: site-header;
+}
+
+.tab-bar {
+  view-transition-name: tab-bar;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  @view-transition {
+    navigation: none;
+  }
+}
+
+@keyframes heat-glow {
+  0%,
+  6% {
+    background: var(--color-panel-tile);
+  }
+  16%,
+  84% {
+    background: var(--lit);
+  }
+  94%,
+  100% {
+    background: var(--color-panel-tile);
+  }
+}

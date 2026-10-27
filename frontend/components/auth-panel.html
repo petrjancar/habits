@@ -1,0 +1,27 @@
+<aside
+  aria-label="Habits"
+  class="flex flex-col bg-panel px-6 py-5 text-panel-ink lg:min-h-dvh lg:justify-between lg:gap-10 lg:px-14 lg:py-12"
+>
+  <a
+    href="/"
+    class="flex items-center gap-3 self-start text-lg font-semibold text-white [--logo-tile:var(--color-panel-tile)]"
+  >
+    <load src="/components/logo.html" />
+    Habits
+  </a>
+
+  <!-- heatArt (src/components/heat-art.js) lights the days in waves. -->
+  <div
+    x-data="heatArt"
+    class="mx-auto my-auto hidden w-full max-w-96 grid-cols-7 gap-2.5 lg:grid"
+    aria-hidden="true"
+  >
+    <template x-for="i in 49">
+      <div class="heat-art-cell h-11 rounded-[10px]"></div>
+    </template>
+  </div>
+
+  <p class="hidden max-w-xs text-panel-muted lg:block">
+    Small things, every day. Running on your own server.
+  </p>
+</aside>

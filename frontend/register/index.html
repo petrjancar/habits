@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <load src="/components/head.html" />
+    <title>Create account · Habits</title>
+    <!-- blocking="render": the browser keeps showing the previous page until
+         this page is fully built, so nothing appears half-drawn. -->
+    <script type="module" src="/src/register.js" blocking="render"></script>
+  </head>
+  <body class="min-h-dvh lg:grid lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+    <load src="/components/auth-panel.html" />
+
+    <main class="flex items-center justify-center px-6 py-11 sm:px-10 lg:py-12">
+      <div class="w-full max-w-sm" x-data="registerComponent">
+        <h1 class="page-title">Create an account</h1>
+        <p class="mt-2.5 text-[17px] leading-relaxed text-muted">
+          You'll use your email and password to log in.
+        </p>
+
+        <div class="mt-8">
+          <template x-if="errorMessage">
+            <div
+              class="alert alert-error mb-6"
+              x-text="errorMessage"
+              role="alert"
+            ></div>
+          </template>
+        </div>
+
+        <form @submit.prevent="submit" class="space-y-5">
+          <div>
+            <label for="register-name" class="label">Name</label>
+            <input
+              id="register-name"
+              name="name"
+              type="text"
+              autocomplete="name"
+              required
+              x-model="name"
+              :aria-invalid="!!fieldErrors.name"
+              aria-describedby="register-name-error"
+              class="input"
+            />
+            <p
+              id="register-name-error"
+              x-show="fieldErrors.name"
+              x-text="fieldErrors.name"
+              class="field-error"
+            ></p>
+          </div>
+
+          <div>
+            <label for="register-email" class="label">Email</label>
+            <input
+              id="register-email"
+              name="email"
+              type="email"
+              autocomplete="username"
+              spellcheck="false"
+              required
+              placeholder="you@example.com"
+              x-model="email"
+              :aria-invalid="!!fieldErrors.email"
+              aria-describedby="register-email-error"
+              class="input"
+            />
+            <p
+              id="register-email-error"
+              x-show="fieldErrors.email"
+              x-text="fieldErrors.email"
+              class="field-error"
+            ></p>
+          </div>
+
+          <div>
+            <label for="register-password" class="label">Password</label>
+            <div class="relative" x-data="passwordField">
+              <input
+                id="register-password"
+                name="new-password"
+                type="password"
+                :type="visible ? 'text' : 'password'"
+                autocomplete="new-password"
+                required
+                minlength="8"
+                x-model="password"
+                :aria-invalid="!!fieldErrors.password"
+                aria-describedby="register-password-error register-password-hint"
+                class="input"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                @click="toggle()"
+                :aria-pressed="visible.toString()"
+                aria-controls="register-password"
+                aria-label="Show password"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path x-show="visible" x-cloak d="M3 3l18 18" />
+                </svg>
+              </button>
+            </div>
+            <p id="register-password-hint" class="field-hint">
+              At least 8 characters.
+            </p>
+            <p
+              id="register-password-error"
+              x-show="fieldErrors.password"
+              x-text="fieldErrors.password"
+              class="field-error"
+            ></p>
+          </div>
+
+          <div>
+            <label for="register-password-confirm" class="label"
+              >Confirm password</label
+            >
+            <div class="relative" x-data="passwordField">
+              <input
+                id="register-password-confirm"
+                name="new-password-confirm"
+                type="password"
+                :type="visible ? 'text' : 'password'"
+                autocomplete="new-password"
+                enterkeyhint="done"
+                required
+                minlength="8"
+                x-model="passwordConfirm"
+                :aria-invalid="!!fieldErrors.passwordConfirm"
+                aria-describedby="register-password-confirm-error"
+                class="input"
+              />
+              <button
+                type="button"
+                class="password-toggle"
+                @click="toggle()"
+                :aria-pressed="visible.toString()"
+                aria-controls="register-password-confirm"
+                aria-label="Show password"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path x-show="visible" x-cloak d="M3 3l18 18" />
+                </svg>
+              </button>
+            </div>
+            <p
+              id="register-password-confirm-error"
+              x-show="fieldErrors.passwordConfirm"
+              x-text="fieldErrors.passwordConfirm"
+              class="field-error"
+            ></p>
+          </div>
+
+          <button
+            type="submit"
+            :disabled="loading"
+            class="btn btn-primary w-full"
+          >
+            <span x-show="!loading">Create account</span>
+            <span x-show="loading" x-cloak>Creating account...</span>
+          </button>
+        </form>
+
+        <p class="mt-8 text-sm text-muted">
+          Already have an account?
+          <a href="/login/" class="link ml-1">Log in</a>
+        </p>
+      </div>
+    </main>
+  </body>
+</html>

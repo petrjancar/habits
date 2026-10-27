@@ -1,0 +1,159 @@
+<div x-data="navComponent" data-active="{=$active}">
+  <header class="site-header border-b border-line">
+    <div
+      class="mx-auto flex max-w-[1080px] flex-wrap items-center justify-between gap-x-6 gap-y-3 px-4 py-3 sm:px-6"
+    >
+      <div class="flex items-center gap-7">
+        <a
+          href="/"
+          class="flex min-h-11 items-center gap-3 text-lg font-semibold"
+        >
+          <load src="/components/logo.html" />
+          Habits
+        </a>
+        <nav aria-label="Main" class="hidden gap-1 md:flex">
+          <a
+            href="/"
+            class="nav-pill"
+            data-nav="today"
+            :aria-current="current('/')"
+            >Today</a
+          >
+          <a
+            href="/stats/"
+            class="nav-pill"
+            data-nav="stats"
+            :aria-current="current('/stats/')"
+            >Statistics</a
+          >
+          <a
+            href="/habits/"
+            class="nav-pill"
+            data-nav="habits"
+            :aria-current="current('/habits/')"
+            >Habits</a
+          >
+        </nav>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <a
+          href="/account/"
+          class="flex min-h-11 min-w-0 items-center gap-2.5 rounded-full px-1 text-[15px] font-semibold md:pr-3"
+          :aria-current="current('/account/')"
+          aria-label="Account"
+        >
+          <span
+            id="nav-initials"
+            class="nav-avatar avatar size-10 text-base"
+            x-text="initials($store.auth.user)"
+          ></span>
+          <span
+            id="nav-user-name"
+            class="hidden max-w-48 truncate md:block"
+            x-text="$store.auth.user?.name || $store.auth.user?.email"
+          ></span>
+        </a>
+        <script>
+          // Show the saved user straight away (Alpine keeps it updated later).
+          try {
+            var auth = JSON.parse(localStorage.getItem("pocketbase_auth"));
+            var user = auth && (auth.record || auth.model);
+            if (user) {
+              var name = (user.name || "").trim();
+              document.getElementById("nav-user-name").textContent =
+                name || user.email || "";
+              document.getElementById("nav-initials").textContent = (
+                name
+                  ? name
+                      .split(/\s+/)
+                      .slice(0, 2)
+                      .map(function (part) {
+                        return part[0];
+                      })
+                      .join("")
+                  : (user.email || "").charAt(0)
+              ).toUpperCase();
+            }
+          } catch (e) {}
+        </script>
+        <button
+          @click="logout()"
+          type="button"
+          class="btn btn-quiet btn-sm hidden px-3 md:inline-flex"
+        >
+          Log out
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Tab bar on phones -->
+  <nav
+    aria-label="Main"
+    class="tab-bar fixed inset-x-0 bottom-0 z-20 flex border-t border-line bg-surface pb-[env(safe-area-inset-bottom)] md:hidden"
+  >
+    <a href="/" class="tab" data-nav="today" :aria-current="current('/')">
+      <svg
+        viewBox="0 0 24 24"
+        width="24"
+        height="24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <circle cx="12" cy="12" r="9" />
+        <path d="M8 12.5l2.7 2.7L16.5 9.5" />
+      </svg>
+      Today
+    </a>
+    <a
+      href="/stats/"
+      class="tab"
+      data-nav="stats"
+      :aria-current="current('/stats/')"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="24"
+        height="24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M5 20V12M12 20V5M19 20v-9" />
+      </svg>
+      Statistics
+    </a>
+    <a
+      href="/habits/"
+      class="tab"
+      data-nav="habits"
+      :aria-current="current('/habits/')"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="24"
+        height="24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M9 6h11M9 12h11M9 18h11" />
+        <circle cx="4.5" cy="6" r="1" />
+        <circle cx="4.5" cy="12" r="1" />
+        <circle cx="4.5" cy="18" r="1" />
+      </svg>
+      Habits
+    </a>
+  </nav>
+</div>

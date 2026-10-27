@@ -1,0 +1,45 @@
+# Automatic dependency updates: Dependabot checks weekly and opens pull
+# requests; CI (format check, tests, build) runs on each one.
+# PocketBase (server and JS SDK) is not updated here; a weekly workflow opens
+# a reminder issue instead (.github/workflows/pocketbase-update.yml).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Prague
+    groups:
+      # One PR for all minor/patch updates; majors get their own PRs.
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+    ignore:
+      # The PocketBase JS SDK is updated together with the server; see
+      # .github/workflows/pocketbase-update.yml.
+      - dependency-name: pocketbase
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Prague
+    groups:
+      github-actions:
+        patterns: ["*"]
+
+  # Base images in the Dockerfile (node, alpine).
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Prague
+    ignore:
+      # Stay on the Node major used in CI; upgrade both together by hand.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]

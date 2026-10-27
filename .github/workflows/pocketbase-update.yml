@@ -1,0 +1,79 @@
+# Weekly reminder to update PocketBase.
+#
+# PocketBase is updated by hand, because three things must move together:
+# PB_VERSION in the Dockerfile, the local pocketbase binary and the `pocketbase`
+# JS SDK in frontend/package.json (Dependabot is told to ignore the SDK).
+# This workflow only checks for a newer release and opens an issue with the
+# steps; it changes nothing itself.
+name: PocketBase update check
+
+on:
+  schedule:
+    - cron: "0 5 * * 1" # Mondays 05:00 UTC
+  workflow_dispatch: # allows a manual run from the Actions tab
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Compare PB_VERSION with the latest PocketBase release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          LABEL: pocketbase-update
+        run: |
+          set -euo pipefail
+
+          CURRENT=$(sed -n 's/^ARG PB_VERSION=//p' Dockerfile | tr -d '\r')
+          SDK=$(jq -r '.dependencies.pocketbase' frontend/package.json)
+          LATEST=$(gh api repos/pocketbase/pocketbase/releases/latest --jq '.tag_name' | sed 's/^v//')
+          echo "Dockerfile PB_VERSION: $CURRENT, latest release: $LATEST, JS SDK: $SDK"
+
+          if [ -z "$CURRENT" ] || [ -z "$LATEST" ]; then
+            echo "::error::Could not determine the current or latest PocketBase version."
+            exit 1
+          fi
+
+          # Newest of the two by version order; equal means we're up to date.
+          NEWEST=$(printf '%s\n%s\n' "$CURRENT" "$LATEST" | sort -V | tail -n1)
+          if [ "$CURRENT" = "$LATEST" ] || [ "$NEWEST" = "$CURRENT" ]; then
+            echo "PocketBase is up to date."
+            exit 0
+          fi
+
+          # Make sure the label exists (first run) before searching by it.
+          gh label create "$LABEL" --color "1f4d44" \
+            --description "Reminder to update PocketBase" --force
+
+          TITLE="Update PocketBase to v$LATEST"
+          if gh issue list --state open --label "$LABEL" --json title --jq '.[].title' | grep -Fxq "$TITLE"; then
+            echo "Reminder issue already open: $TITLE"
+            exit 0
+          fi
+
+          # Close reminders for older versions; the new issue replaces them.
+          for number in $(gh issue list --state open --label "$LABEL" --json number --jq '.[].number'); do
+            gh issue close "$number" --comment "Superseded by the reminder for v$LATEST."
+          done
+
+          cat > issue.md <<BODY
+          PocketBase **v$LATEST** is available. This app uses **v$CURRENT** (\`PB_VERSION\` in the \`Dockerfile\`).
+
+          PocketBase is pre-1.0, so releases can include breaking changes. Update all three parts together:
+
+          - [ ] Read the release notes for every version after v$CURRENT: https://github.com/pocketbase/pocketbase/releases (look for breaking changes and required code or hook updates).
+          - [ ] Update \`PB_VERSION\` in the \`Dockerfile\` to \`$LATEST\`.
+          - [ ] Download the matching binary for local development and replace \`pocketbase(.exe)\` in the project root.
+          - [ ] Check which JS SDK version supports this server version (https://github.com/pocketbase/js-sdk/releases; currently \`$SDK\`) and update it: \`npm install pocketbase@<version>\` in \`frontend/\`.
+          - [ ] Back up the local \`pb_data\`, start the new binary and click through the app (new versions may upgrade the database and can't be downgraded).
+          - [ ] Run \`npm run test:run\` and \`npm run build\` in \`frontend/\`.
+          - [ ] Back up \`pb_data\` on the server, then deploy with \`docker compose up -d --build\`.
+          BODY
+
+          gh issue create --title "$TITLE" --label "$LABEL" --body-file issue.md
