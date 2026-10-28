@@ -44,17 +44,18 @@ habits/
 │   ├── index.html                 # Today (/)
 │   ├── stats/, habits/, account/  # one folder with an index.html per page
 │   ├── login/, register/
-│   ├── components/                # HTML partials: head, nav, logo, auth panel
+│   ├── components/                # HTML partials: head, nav, logo, auth panel, calendar popover
 │   ├── public/                    # copied as-is (favicon, app icons, manifest.json)
 │   ├── src/
 │   │   ├── <page>.js              # page entry: startApp({ pageComponent })
 │   │   ├── pages/<page>.js        # page components (Alpine data + logic)
 │   │   ├── lib/dates.js           # "YYYY-MM-DD" calendar-day helpers
-│   │   ├── lib/habits.js          # schedules, streaks, rates, statistics, CSV export (pure, unit-tested)
-│   │   ├── lib/csv-import.js      # CSV parsing and import planning (pure, unit-tested)
+│   │   ├── lib/calendar.js        # month and year grids, keyboard moves for the calendar popover
+│   │   ├── lib/habits.js          # schedules, streaks, rates, pauses and skips, statistics (pure, unit-tested)
+│   │   ├── lib/backup.js          # backup file: export, and planning an import (pure, unit-tested)
 │   │   ├── data.js                # loads and changes habits and check-ins
 │   │   ├── theme.js               # light / dark / system theme
-│   │   ├── components/            # shared Alpine components (nav, password field, heat art)
+│   │   ├── components/            # shared Alpine components (nav, password field, heat art, calendar)
 │   │   ├── app.js                 # startApp(): auth store, shared components, Alpine start
 │   │   ├── pb.js                  # the single shared PocketBase client
 │   │   ├── auth.js                # requireAuth(), redirectIfAuthed(), URL constants
@@ -106,13 +107,33 @@ The schema lives in `pb_migrations/` and is applied automatically when PocketBas
 
 Deleting a user deletes their habits and check-ins; deleting a habit deletes its check-ins.
 
-Two migrations configure the server rather than the schema: `*_enable_batch_api.js` (used by CSV import) and `*_server_settings.js` (rate limits, trusted proxy header, required user name). The rate limits for check-ins and batches are set so a 100-check-in batch every 300 ms stays under them, which is what `importPlan()` in `data.js` does.
+Three migrations configure the server rather than the schema: `*_enable_batch_api.js` (used by backup import, Reset progress, and pausing or skipping several habits at once), `*_server_settings.js` (rate limits, trusted proxy header, required user name) and `*_checkin_delete_rate_limit.js` (a rate limit for deleting check-ins, used by Reset progress). The rate limits for creating and deleting check-ins and for batches are set so a 100-request batch every 300 ms stays under them, which is what `importPlan()` and `resetHabit()` in `data.js` do.
+
+The habit colours are a fixed list in three places that must match: `HABIT_COLORS` in `lib/habits.js`, the `--color-habit-*` tokens in `style.css` (light and dark) and the latest `*_habit_colors.js` migration. `tests/unit/colors.test.js` checks this.
 
 ### Changing the schema
 
 - Make schema changes (collections, fields, API rules) in your **local** PocketBase dashboard. PocketBase writes each change as a migration file in `pb_migrations/`.
 - Commit the migration files together with the frontend code that uses them.
 - On the server, the Docker image applies new migrations on startup. Don't change the schema in the server's dashboard; those changes would not be recorded and would drift from git.
+
+## Versioning and releases
+
+Versions follow [Semantic Versioning](https://semver.org): `MAJOR.MINOR.PATCH`.
+
+- **MAJOR** – a change that needs action from people running the app or can't be undone: an incompatible change to the data or a migration that can't be rolled back, a changed backup file format (a new `version`) or environment variable, or a removed feature.
+- **MINOR** – new features and other backwards-compatible changes, including changes to the Docker setup that need nothing from existing users.
+- **PATCH** – bug fixes and small improvements. Dependency updates are patch releases unless they change how the app behaves.
+
+The version lives only in `frontend/package.json` (and the matching two entries in `package-lock.json`). The Account page shows it, and every release gets an entry in `CHANGELOG.md`.
+
+To release:
+
+1. Raise the version in `package.json` and `package-lock.json` and add the entry to `CHANGELOG.md`.
+2. Merge the pull request into `main` once CI is green.
+3. Tag the merge commit: `git tag vX.Y.Z && git push origin vX.Y.Z`. CI publishes the image as `:X.Y.Z`, `:X.Y`, `:X` and `:latest`.
+
+Never move or delete a release tag: people pin to these images.
 
 ## Dependency updates
 

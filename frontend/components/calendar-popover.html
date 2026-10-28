@@ -1,0 +1,157 @@
+<!-- Calendar popover. Attributes:
+       cal      the page's calendar state (src/components/calendar.js), e.g. cal
+       trigger  x-ref of the button that calls <cal>.toggle(), e.g. calTrigger
+       label    the dialog's accessible name
+       align    position classes, e.g. "left-0" or "left-1/2 -translate-x-1/2"
+     Place it next to the trigger inside a `relative` wrapper. -->
+<div
+  x-show="{=$cal}.open"
+  x-cloak
+  role="dialog"
+  aria-label="{=$label}"
+  class="cal-pop {=$align}"
+  @click.outside="{=$cal}.hide()"
+  @keydown.escape.prevent.stop="{=$cal}.hide(); $refs.{=$trigger}?.focus()"
+  @keydown="if ({=$cal}.keydown($event)) $nextTick(() => $el.querySelector('[data-focus=true]')?.focus())"
+  x-effect="if ({=$cal}.open) $nextTick(() => { $el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); $el.querySelector('[data-focus=true]')?.focus({ preventScroll: true }); })"
+>
+  <div class="flex items-center gap-1">
+    <button
+      type="button"
+      class="flex min-h-10 items-center gap-1 rounded-lg px-2 text-[17px] font-bold enabled:hover:bg-ink/[0.06]"
+      :disabled="!{=$cal}.canSwitch"
+      :aria-label="{=$cal}.view === 'days' ? `${{=$cal}.title}, choose a month` : ({=$cal}.canSwitch ? `${{=$cal}.title}, back to days` : {=$cal}.title)"
+      @click="{=$cal}.switchView()"
+    >
+      <span x-text="{=$cal}.title"></span>
+      <svg
+        x-show="{=$cal}.canSwitch"
+        viewBox="0 0 24 24"
+        width="16"
+        height="16"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+        class="text-muted transition-transform"
+        :class="{=$cal}.view === 'months' && 'rotate-180'"
+      >
+        <path d="M6 9l6 6 6-6" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="btn-icon ml-auto size-10"
+      :aria-label="{=$cal}.view === 'days' ? 'Previous month' : 'Previous year'"
+      @click="{=$cal}.shift(-1)"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M15 6l-6 6 6 6" />
+      </svg>
+    </button>
+    <button
+      type="button"
+      class="btn-icon size-10"
+      :aria-label="{=$cal}.view === 'days' ? 'Next month' : 'Next year'"
+      @click="{=$cal}.shift(1)"
+    >
+      <svg
+        viewBox="0 0 24 24"
+        width="18"
+        height="18"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </button>
+  </div>
+
+  <div x-show="{=$cal}.view === 'days'" class="flex flex-col gap-1">
+    <div class="grid grid-cols-7 gap-1" aria-hidden="true">
+      <template x-for="h in {=$cal}.heads" :key="h">
+        <span
+          class="text-center text-xs font-semibold text-muted"
+          x-text="h"
+        ></span>
+      </template>
+    </div>
+    <div class="grid grid-cols-7 gap-1">
+      <template x-for="d in {=$cal}.days" :key="d.key">
+        <button
+          type="button"
+          class="cal-cell aspect-square"
+          :class="[
+            d.level === null ? '' : 'heat-' + d.level,
+            (d.outside || d.disabled) && 'opacity-40',
+            d.disabled && 'cursor-not-allowed hover:ring-0',
+            d.selected && 'ring-2 ring-primary',
+            d.isToday && 'underline decoration-2 underline-offset-4',
+          ]"
+          :tabindex="d.focus ? 0 : -1"
+          :data-focus="d.focus"
+          :aria-label="d.aria"
+          :aria-pressed="d.selected.toString()"
+          :aria-current="d.isToday ? 'date' : null"
+          :disabled="d.disabled"
+          @click="{=$cal}.pickDay(d.key)"
+          x-text="d.num"
+        ></button>
+      </template>
+    </div>
+  </div>
+
+  <div x-show="{=$cal}.view === 'months'" class="grid grid-cols-4 gap-1.5">
+    <template x-for="m in {=$cal}.months" :key="m.key">
+      <button
+        type="button"
+        class="cal-cell min-h-12"
+        :class="[
+          m.selected ? 'bg-primary text-on-primary' : 'bg-canvas',
+          m.isCurrent && !m.selected && 'ring-1 ring-primary',
+        ]"
+        :tabindex="m.focus ? 0 : -1"
+        :data-focus="m.focus"
+        :aria-label="m.aria"
+        :aria-pressed="m.selected.toString()"
+        :aria-current="m.isCurrent ? 'date' : null"
+        @click="{=$cal}.pickMonth(m.key)"
+        x-text="m.label"
+      ></button>
+    </template>
+  </div>
+
+  <div class="flex items-center justify-between border-t border-divider pt-2">
+    <span
+      x-show="{=$cal}.view === 'days'"
+      class="flex items-center gap-1.5 text-xs text-muted"
+      aria-hidden="true"
+      >less<span class="heat-1 size-3 rounded"></span
+      ><span class="heat-2 size-3 rounded"></span
+      ><span class="heat-3 size-3 rounded"></span
+      ><span class="heat-4 size-3 rounded"></span>more</span
+    >
+    <button
+      type="button"
+      class="btn btn-quiet btn-sm ml-auto min-h-10 px-4"
+      @click="{=$cal}.goToday()"
+      x-text="{=$cal}.canSwitch ? 'Today' : 'This month'"
+    ></button>
+  </div>
+</div>

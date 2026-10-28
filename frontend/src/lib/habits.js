@@ -34,6 +34,14 @@ export const HABIT_COLORS = [
   { key: "brick", label: "Brick" },
   { key: "blue", label: "Blue" },
   { key: "plum", label: "Plum" },
+  { key: "teal", label: "Teal" },
+  { key: "sky", label: "Sky" },
+  { key: "indigo", label: "Indigo" },
+  { key: "rose", label: "Rose" },
+  { key: "wine", label: "Wine" },
+  { key: "orange", label: "Orange" },
+  { key: "olive", label: "Olive" },
+  { key: "slate", label: "Slate" },
 ];
 
 /** CSS custom properties for a habit colour (defined in style.css). */
@@ -104,6 +112,33 @@ export function weekProgress(habit, done, key, weekStart = "monday") {
     count: weekCount(habit, done, start),
     target: weekRequirement(habit, start),
   };
+}
+
+/**
+ * Where a weekly habit stands on one day of its week:
+ * - "done": checked that day;
+ * - "met": not checked, but the weekly goal was already reached earlier that week;
+ * - "due": not checked, and the days left in the week (this one included) are
+ *   no more than the check-ins still needed, so it can't be put off any longer;
+ * - "optional": not checked, and there is still time later in the week.
+ * Only "done" and "due" count towards a day's score (see dayStatus).
+ * Only check-ins earlier in the week matter, so a day's state never depends
+ * on what happened after it.
+ */
+export function weeklyState(habit, done, key, weekStart = "monday") {
+  if (done.has(key)) return "done";
+  const start = startOfWeek(key, weekStart);
+  let before = 0;
+  for (let d = start; d < key; d = addDays(d, 1)) {
+    if (done.has(d) && isActiveOn(habit, d)) before++;
+  }
+  const needed = weekRequirement(habit, start) - before;
+  if (needed <= 0) return "met";
+  let daysLeft = 0;
+  for (let d = key; d <= addDays(start, 6); d = addDays(d, 1)) {
+    if (isActiveOn(habit, d)) daysLeft++;
+  }
+  return daysLeft <= needed ? "due" : "optional";
 }
 
 // ---------------------------------------------------------------------------
@@ -235,29 +270,44 @@ export function completion(
 export const percent = (done, total) =>
   total > 0 ? Math.round((100 * done) / total) : null;
 
+/** The earliest day worth showing: when the first of these habits started. */
+export function firstDay(habits, today) {
+  return habits.reduce((first, h) => minKey(first, h.start_date), today);
+}
+
 /** Habits on the day's list, e.g. on the Today page. */
 export function habitsOnDay(habits, key) {
   return habits.filter((h) => isScheduledOn(h, key));
 }
 
 /**
- * The day's list completion: { done, total }. A weekly habit counts as done
- * when it was checked that day or its weekly target is already met.
+ * The day's list completion: { done, total, optional }. A weekly habit only
+ * counts on the day it is checked, or when it is due (see weeklyState);
+ * otherwise it is left out of the score and counted in `optional` instead, so
+ * a rest day of a "2× a week" habit isn't a missed day.
  */
 export function dayStatus(habits, doneOf, key, weekStart = "monday") {
   let doneCount = 0;
   let total = 0;
+  let optional = 0;
   for (const habit of habitsOnDay(habits, key)) {
     const done = doneOf(habit.id);
-    total++;
-    if (done.has(key)) {
-      doneCount++;
-    } else if (isWeekly(habit)) {
-      const { count, target } = weekProgress(habit, done, key, weekStart);
-      if (count >= target) doneCount++;
+    if (isWeekly(habit)) {
+      const state = weeklyState(habit, done, key, weekStart);
+      if (state === "done") {
+        doneCount++;
+        total++;
+      } else if (state === "due") {
+        total++;
+      } else {
+        optional++;
+      }
+    } else {
+      total++;
+      if (done.has(key)) doneCount++;
     }
   }
-  return { done: doneCount, total };
+  return { done: doneCount, total, optional };
 }
 
 // ---------------------------------------------------------------------------
@@ -585,16 +635,47 @@ export function sortHabits(habits) {
   );
 }
 
-/** Pause starting today. Returns the new pauses array. */
-export function pausedFrom(habit, today) {
-  return [...(habit.pauses || []), { from: today, to: null }];
+// ---------------------------------------------------------------------------
+// Pauses
+// ---------------------------------------------------------------------------
+// A pause is { from, to }: both days are paused; `to` is null for a pause
+// with no end yet. Pauses may lie in the past, run today or be planned ahead.
+
+/** Sorted by start, with overlapping or back-to-back pauses joined into one. */
+export function mergePauses(pauses) {
+  const sorted = (pauses || [])
+    .map((p) => ({ from: p.from, to: p.to ?? null }))
+    .sort((a, b) => a.from.localeCompare(b.from));
+  const merged = [];
+  for (const pause of sorted) {
+    const last = merged.at(-1);
+    if (last && (last.to === null || addDays(last.to, 1) >= pause.from)) {
+      if (last.to !== null) {
+        last.to = pause.to === null ? null : maxKey(last.to, pause.to);
+      }
+    } else {
+      merged.push(pause);
+    }
+  }
+  return merged;
 }
 
-/** Ends the open pause yesterday (or drops it if it started today). */
+const runsOn = (pause, key) =>
+  pause.from <= key && (!pause.to || key <= pause.to);
+
+/** Pause starting today, until resumed. Returns the new pauses array. */
+export function pausedFrom(habit, today) {
+  return mergePauses([...(habit.pauses || []), { from: today, to: null }]);
+}
+
+/**
+ * Ends the pause running today: it stops yesterday, or goes away if it only
+ * started today. Planned pauses stay.
+ */
 export function resumedOn(habit, today) {
   const yesterday = addDays(today, -1);
   return (habit.pauses || []).flatMap((p) => {
-    if (p.to) return [p];
+    if (!runsOn(p, today)) return [p];
     return p.from > yesterday ? [] : [{ from: p.from, to: yesterday }];
   });
 }
@@ -606,38 +687,145 @@ export function restoredOn(habit, today) {
   if (habit.archived_on && habit.archived_on <= yesterday) {
     pauses.push({ from: habit.archived_on, to: yesterday });
   }
-  return pauses;
+  return mergePauses(pauses);
 }
 
-const csvCell = (value) => {
-  const text = String(value ?? "");
-  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
-};
-
-/** One row per check-in, plus one row for each habit without any. */
-export function toCsv(habits, doneOf) {
-  const rows = [];
-  for (const habit of sortHabits(habits)) {
-    const dates = [...doneOf(habit.id).keys()].sort();
-    const base = [
-      habit.name,
-      scheduleLabel(habit),
-      habit.start_date,
-      habit.archived_on
-        ? "archived"
-        : isPausedOn(habit, "9999-12-31")
-          ? "paused"
-          : "active",
-      habit.color,
-      habit.note,
-    ];
-    if (!dates.length) rows.push([...base, ""]);
-    for (const date of dates) rows.push([...base, date]);
+/**
+ * Adds a planned pause from `from` to `to` (both paused). It can't start in
+ * the past. If it starts today and today is already checked off, it starts
+ * tomorrow instead, so a done day never disappears.
+ * Returns { pauses, from } or { error }.
+ */
+export function planPause(habit, { from, to }, today, doneToday = false) {
+  if (!from || !to) return { error: "Pick the first and the last day." };
+  if (from < today) return { error: "A pause can't start in the past." };
+  if (to < from) return { error: "The last day can't be before the first." };
+  const start = from === today && doneToday ? addDays(today, 1) : from;
+  if (start > to) {
+    return {
+      error: "Today is already checked off, so there's nothing to pause.",
+    };
   }
-  return [
-    ["habit", "schedule", "started", "status", "color", "note", "done_on"],
-    ...rows,
-  ]
-    .map((row) => row.map(csvCell).join(","))
-    .join("\r\n");
+  return {
+    pauses: mergePauses([...(habit.pauses || []), { from: start, to }]),
+    from: start,
+  };
+}
+
+/**
+ * Removes a running or planned pause. The days of a running pause that are
+ * already over stay paused, so past statistics don't change.
+ */
+export function removePause(habit, pause, today) {
+  return (habit.pauses || []).flatMap((p) => {
+    if (p.from !== pause.from || (p.to ?? null) !== (pause.to ?? null)) {
+      return [p];
+    }
+    return p.from < today ? [{ from: p.from, to: addDays(today, -1) }] : [];
+  });
+}
+
+/** The pauses from today on (running or planned), cut to start today at the earliest. */
+export function pausesFrom(habit, today) {
+  return mergePauses(
+    (habit.pauses || [])
+      .filter((p) => !p.to || p.to >= today)
+      .map((p) => ({ from: maxKey(p.from, today), to: p.to ?? null })),
+  );
+}
+
+const shortDate = (key) => formatKey(key, { month: "short", day: "numeric" });
+const fullDate = (key) =>
+  formatKey(key, { month: "short", day: "numeric", year: "numeric" });
+
+/** "Nov 2 – 8, 2026"-style range: the year once, at the end. */
+export function pauseRange({ from, to }) {
+  if (!to) return `From ${fullDate(from)}`;
+  if (from === to) return fullDate(from);
+  if (from.slice(0, 4) !== to.slice(0, 4)) {
+    return `${fullDate(from)} – ${fullDate(to)}`;
+  }
+  return `${shortDate(from)} – ${fullDate(to)}`;
+}
+
+/**
+ * The running and planned pauses for a habit's page, soonest first:
+ * [{ from, to, now, label }].
+ */
+export function pauseList(habit, today) {
+  return mergePauses(habit.pauses)
+    .filter((p) => !p.to || p.to >= today)
+    .map((p) => {
+      const now = p.from <= today;
+      // A pause of a single day is a skipped day.
+      const skip = p.from === p.to;
+      let label;
+      if (skip) {
+        label = now ? "Skipped today" : `Skipped on ${fullDate(p.from)}`;
+      } else if (now) {
+        label = p.to
+          ? `Now, until ${fullDate(p.to)}`
+          : `Since ${fullDate(p.from)}, until you resume`;
+      } else {
+        label = pauseRange(p);
+      }
+      return { ...p, now, skip, label };
+    });
+}
+
+/** The next planned pause that hasn't started yet, if any. */
+export function nextPause(habit, today) {
+  return mergePauses(habit.pauses).find((p) => p.from > today) ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Skipping a day
+// ---------------------------------------------------------------------------
+// Skipping a habit on a day ("sick day") is a pause of that one day, so it
+// never counts and never breaks the streak, like any paused day.
+
+/**
+ * Whether the habit would be on the day's list if it weren't paused: started,
+ * not archived yet, and on one of its days.
+ */
+export function wouldBeScheduledOn(habit, key) {
+  if (key < habit.start_date) return false;
+  if (habit.archived_on && key >= habit.archived_on) return false;
+  if (habit.frequency === "days") {
+    return (habit.days || []).includes(weekday(key));
+  }
+  return true;
+}
+
+/** A day that can be skipped: the habit is due, and it isn't checked off. */
+export function canSkip(habit, done, key) {
+  return isScheduledOn(habit, key) && !done.has(key);
+}
+
+/** Pauses with `key` skipped. */
+export function skipDay(habit, key) {
+  if (isPausedOn(habit, key)) return habit.pauses || [];
+  return mergePauses([...(habit.pauses || []), { from: key, to: key }]);
+}
+
+/**
+ * Pauses with `key` no longer paused. A longer pause around it is split in
+ * two, so only that day changes.
+ */
+export function unskipDay(habit, key) {
+  return mergePauses(
+    (habit.pauses || []).flatMap((p) => {
+      if (!(p.from <= key && (!p.to || key <= p.to))) return [p];
+      const parts = [];
+      if (p.from < key) parts.push({ from: p.from, to: addDays(key, -1) });
+      if (!p.to || p.to > key)
+        parts.push({ from: addDays(key, 1), to: p.to ?? null });
+      return parts;
+    }),
+  );
+}
+
+/** True if `key` is a skipped day: a pause of just that day. */
+export function isSkippedOn(habit, key) {
+  return (habit.pauses || []).some((p) => p.from === key && p.to === key);
 }

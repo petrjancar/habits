@@ -53,6 +53,8 @@ const appVersion = () => ({
 
 export default defineConfig({
   plugins: [tailwindcss(), injectHTML(), renderBlockingScripts(), appVersion()],
+  // Scripts read the version as __APP_VERSION__, e.g. to note it in a backup.
+  define: { __APP_VERSION__: JSON.stringify(version) },
   build: {
     outDir: "../pb_public",
     emptyOutDir: true,

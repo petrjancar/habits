@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  addYears,
+  isDateKey,
   addDays,
   addMonths,
   diffDays,
@@ -47,5 +49,20 @@ describe("dates", () => {
       "2026-11-01",
       "2026-11-02",
     ]);
+  });
+
+  it("adds years, turning Feb 29 into Feb 28 when needed", () => {
+    expect(addYears("2026-10-28", 1)).toBe("2027-10-28");
+    expect(addYears("2028-02-29", 1)).toBe("2029-02-28");
+    expect(addYears("2028-02-29", 4)).toBe("2032-02-29");
+  });
+
+  it("recognises real days written as YYYY-MM-DD", () => {
+    expect(isDateKey("2026-10-28")).toBe(true);
+    expect(isDateKey("2028-02-29")).toBe(true);
+    expect(isDateKey("2026-02-29")).toBe(false);
+    expect(isDateKey("2026-13-01")).toBe(false);
+    expect(isDateKey("26.10.2026")).toBe(false);
+    expect(isDateKey(null)).toBe(false);
   });
 });
