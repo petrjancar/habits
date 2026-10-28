@@ -25,6 +25,9 @@ export const statsComponent = ({
   stats: null,
   heatWide: { cells: [], months: [], weekdays: [] },
   heatNarrow: { cells: [], months: [], weekdays: [] },
+  // Below the large breakpoint the habit list shows this many until "Show all".
+  HABITS_SHOWN: 6,
+  showAllHabits: false,
 
   async init() {
     if (!requireAuth()) {

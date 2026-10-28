@@ -112,7 +112,11 @@
             </section>
           </div>
 
-          <div class="flex flex-wrap items-start gap-6">
+          <!-- Side by side on large screens, where the list of habits scrolls
+               inside its card instead of making the row taller. -->
+          <div
+            class="flex flex-wrap items-start gap-6 lg:grid lg:grid-cols-[3fr_2fr] lg:items-stretch"
+          >
             <section
               aria-label="Completion chart"
               class="card flex min-w-0 flex-[3_1_520px] flex-col gap-4 p-5"
@@ -158,28 +162,42 @@
                   >Open a habit for its details.</span
                 >
               </div>
-              <template x-for="h in stats.habits" :key="h.id">
-                <a
-                  :href="`/habits/?id=${h.id}`"
-                  class="flex min-h-[60px] flex-col justify-center gap-2 border-t border-divider px-5 py-3 transition-colors hover:bg-canvas/50"
+              <div class="relative lg:min-h-[240px] lg:flex-1">
+                <div
+                  class="lg:absolute lg:inset-0 lg:overflow-y-auto lg:overscroll-contain"
                 >
-                  <span
-                    class="flex items-baseline justify-between gap-3 text-base font-semibold"
-                  >
-                    <span class="flex min-w-0 items-center gap-2">
+                  <template x-for="(h, i) in stats.habits" :key="h.id">
+                    <a
+                      :href="`/habits/?id=${h.id}`"
+                      class="flex min-h-[60px] flex-col justify-center gap-2 border-t border-divider px-5 py-3 transition-colors hover:bg-canvas/50"
+                      :class="!showAllHabits && i >= HABITS_SHOWN && 'max-lg:hidden'"
+                    >
                       <span
-                        class="size-2.5 shrink-0 rounded-full"
-                        :style="{ background: h.color }"
-                      ></span>
-                      <span class="truncate" x-text="h.name"></span>
-                    </span>
-                    <span x-text="h.pctText"></span>
-                  </span>
-                  <span class="progress h-2">
-                    <span :style="{ width: h.width }"></span>
-                  </span>
-                </a>
-              </template>
+                        class="flex items-baseline justify-between gap-3 text-base font-semibold"
+                      >
+                        <span class="flex min-w-0 items-center gap-2">
+                          <span
+                            class="size-2.5 shrink-0 rounded-full"
+                            :style="{ background: h.color }"
+                          ></span>
+                          <span class="truncate" x-text="h.name"></span>
+                        </span>
+                        <span x-text="h.pctText"></span>
+                      </span>
+                      <span class="progress h-2">
+                        <span :style="{ width: h.width }"></span>
+                      </span>
+                    </a>
+                  </template>
+                </div>
+              </div>
+              <button
+                type="button"
+                x-show="!showAllHabits && stats.habits.length > HABITS_SHOWN"
+                class="btn btn-quiet btn-sm m-2 lg:hidden"
+                @click="showAllHabits = true"
+                x-text="`Show all ${stats.habits.length}`"
+              ></button>
               <p x-show="!stats.habits.length" class="px-5 pb-5 text-muted">
                 Nothing was due in this period.
               </p>
@@ -196,7 +214,7 @@
                 <span class="text-sm text-muted">
                   <span class="hidden sm:inline">The last 52 weeks.</span>
                   <span class="sm:hidden">The last 18 weeks.</span>
-                  Each row is a day of the week.
+                  Pick a day to open it.
                 </span>
               </div>
               <div
@@ -243,11 +261,13 @@
                   class="grid grid-cols-[repeat(52,minmax(0,1fr))] gap-[3px]"
                 >
                   <template x-for="cell in heatWide.cells" :key="cell.key">
-                    <div
-                      class="h-4 rounded"
-                      :class="cell.future ? '' : 'heat-' + cell.level"
+                    <a
+                      tabindex="-1"
+                      class="block h-4 rounded"
+                      :class="cell.future ? '' : 'heat-' + cell.level + ' hover:ring-2 hover:ring-primary'"
+                      :href="cell.future ? null : `/?date=${cell.key}`"
                       :title="cell.title"
-                    ></div>
+                    ></a>
                   </template>
                 </div>
               </div>
@@ -283,11 +303,13 @@
                   class="grid grid-cols-[repeat(18,minmax(0,1fr))] gap-[3px]"
                 >
                   <template x-for="cell in heatNarrow.cells" :key="cell.key">
-                    <div
-                      class="h-4 rounded"
-                      :class="cell.future ? '' : 'heat-' + cell.level"
+                    <a
+                      tabindex="-1"
+                      class="block h-4 rounded"
+                      :class="cell.future ? '' : 'heat-' + cell.level + ' hover:ring-2 hover:ring-primary'"
+                      :href="cell.future ? null : `/?date=${cell.key}`"
                       :title="cell.title"
-                    ></div>
+                    ></a>
                   </template>
                 </div>
               </div>

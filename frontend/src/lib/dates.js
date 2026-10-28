@@ -88,3 +88,18 @@ export const WEEKDAY_LONG = [
   "Saturday",
   "Sunday",
 ];
+
+/** The same day `years` later; Feb 29 becomes Feb 28 when there is none. */
+export function addYears(key, years) {
+  const [y, m, d] = key.split("-").map(Number);
+  const target = `${y + years}-${pad(m)}-01`;
+  return `${target.slice(0, 8)}${pad(Math.min(d, Number(endOfMonth(target).slice(8))))}`;
+}
+
+/** True for a real calendar day written as "YYYY-MM-DD". */
+export function isDateKey(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  return fromUTC(toUTC(value)) === value;
+}

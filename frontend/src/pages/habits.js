@@ -12,22 +12,34 @@ import {
   formatKey,
   startOfMonth,
   startOfWeek,
+  isDateKey,
   todayKey,
   weekdayOrder,
 } from "../lib/dates.js";
+import { createCalendar } from "../components/calendar.js";
 import {
   HABIT_COLORS,
   colorVars,
   completion,
   isActiveOn,
   isArchived,
+  canSkip,
   isPaused,
+  isPausedOn,
   isScheduledOn,
+  isSkippedOn,
   isWeekly,
+  nextPause,
+  pauseList,
+  pauseRange,
   pausedFrom,
   percent,
+  planPause,
+  removePause,
   restoredOn,
   resumedOn,
+  skipDay,
+  unskipDay,
   scheduleLabel,
   streakInfo,
   streakLabel,
@@ -57,14 +69,57 @@ const emptyForm = () => ({
   note: "",
 });
 
+/** The question asked before a habit is reset. */
+export function resetText(name, checkins) {
+  const start = `start “${name}” over from today`;
+  if (!checkins) return `Reset “${name}”? Its start date moves to today.`;
+  const count = `${checkins} check-in${checkins === 1 ? "" : "s"}`;
+  return `Delete ${count} and ${start}? Its streaks and statistics will be lost, and this can't be undone.`;
+}
+
 const mediumDate = (key) =>
   formatKey(key, { month: "short", day: "numeric", year: "numeric" });
+
+/** "Mon, Nov 2" for the pause form's date buttons. */
+export const pauseDay = (key) =>
+  key
+    ? formatKey(key, { weekday: "short", month: "short", day: "numeric" })
+    : "";
+
+/** For the habits list: "Paused", "Paused until Nov 8" or "Pause from Nov 2". */
+export function pauseNote(habit, today) {
+  const [first] = pauseList(habit, today);
+  if (first?.now) {
+    if (first.skip) return "Skipped today";
+    return first.to ? `Paused until ${shortDay(first.to)}` : "Paused";
+  }
+  const next = nextPause(habit, today);
+  if (!next) return "";
+  return next.from === next.to
+    ? `Skip on ${shortDay(next.from)}`
+    : `Pause from ${shortDay(next.from)}`;
+}
+
+const shortDay = (key) => formatKey(key, { month: "short", day: "numeric" });
+
+/** The note on a paused habit's page. */
+export function pausedText(habit, today) {
+  const [first] = pauseList(habit, today);
+  if (!first?.now) return "";
+  if (first.skip) {
+    return "This habit is skipped today. It doesn't count, and its streak is kept.";
+  }
+  return first.to
+    ? `This habit is paused until ${mediumDate(first.to)}. Its streak is kept, and it's back on Today the day after.`
+    : "This habit is paused. Its streak is kept, and it's hidden from Today until you resume it.";
+}
 
 export const habitsComponent = ({
   store = createStore(),
   now = () => new Date(),
 } = {}) => ({
   colors: HABIT_COLORS.map((c) => ({ ...c, ...colorVars(c.key) })),
+  pauseDay,
   frequencies: FREQUENCIES,
   loading: true,
   error: "",
@@ -74,8 +129,17 @@ export const habitsComponent = ({
   archiveOpen: false,
   selectedId: "",
   month: "",
+  // The calendar day whose menu is open ("" for none).
+  dayMenu: "",
+  cal: createCalendar(),
+  // "Plan a pause": first and last paused day, and whether it's for every habit.
+  pauseForm: { open: false, from: "", to: "", all: false, error: "" },
+  pauseFromCal: createCalendar(),
+  pauseToCal: createCalendar(),
+  pauseNotice: "",
   detail: null,
   confirmDelete: false,
+  confirmReset: false,
   busy: false,
   form: emptyForm(),
   formErrors: {},
@@ -87,6 +151,25 @@ export const habitsComponent = ({
       return;
     }
     this.today = todayKey(now());
+    this.cal.setup({
+      view: "months",
+      weekStart: () => this.weekStart(),
+      today: () => this.today,
+      selected: () => this.month || startOfMonth(this.today),
+      onPick: (key) => this.goToMonth(key),
+    });
+    const pausePicker = (field, min) => ({
+      view: "days",
+      weekStart: () => this.weekStart(),
+      today: () => this.today,
+      selected: () => this.pauseForm[field],
+      min,
+      onPick: (key) => this.setPauseDay(field, key),
+    });
+    this.pauseFromCal.setup(pausePicker("from", () => this.today));
+    this.pauseToCal.setup(
+      pausePicker("to", () => this.pauseForm.from || this.today),
+    );
     const params = new URLSearchParams(window.location.search);
     // Draw right away from the last known data, then refresh it.
     const cached = store.loadCached();
@@ -165,15 +248,14 @@ export const habitsComponent = ({
         today,
         weekStart,
       );
-      const paused = isPaused(habit, today);
       return {
         id: habit.id,
         name: habit.name,
         sub: isArchived(habit)
           ? `Archived ${mediumDate(habit.archived_on)}`
-          : paused
-            ? `${scheduleLabel(habit)} · Paused`
-            : scheduleLabel(habit),
+          : [scheduleLabel(habit), pauseNote(habit, today)]
+              .filter(Boolean)
+              .join(" · "),
         color: colorVars(habit.color).bg,
         streak: streak.current,
         streakText: streakLabel(streak.current, streak.unit),
@@ -210,7 +292,9 @@ export const habitsComponent = ({
       const due = weekly ? isActiveOn(habit, key) : isScheduledOn(habit, key);
       const future = key > today;
       let state = "off";
-      if (future) state = "future";
+      if (key < habit.start_date) state = "before";
+      else if (isPausedOn(habit, key) && !isDone) state = "paused";
+      else if (future) state = due ? "upcoming" : "future";
       else if (isDone && due) state = "done";
       else if (due && !weekly && key < today) state = "missed";
       else if (due) state = "open";
@@ -220,15 +304,22 @@ export const habitsComponent = ({
         missed: "missed",
         open: "not done yet",
         off: "not scheduled",
-        future: "upcoming",
+        before: "before the habit started",
+        paused: "paused",
+        upcoming: "scheduled",
+        future: "not scheduled",
       }[state];
       cells.push({
         key,
         blank: false,
         num: Number(key.slice(8)),
         state,
+        status,
+        due,
         done: state === "done",
-        clickable: due && !future,
+        // Opens the day menu. Days before the start, and days that aren't
+        // scheduled and have nothing checked, have nothing to offer.
+        clickable: !["before", "off", "future"].includes(state) || isDone,
         isToday: key === today,
         aria: `${label}, ${status}${key === today ? ", today" : ""}`,
         style:
@@ -237,6 +328,35 @@ export const habitsComponent = ({
     }
 
     const monthName = formatKey(month, { month: "long" });
+    const monthHint =
+      month < startOfMonth(habit.start_date)
+        ? `Started ${mediumDate(habit.start_date)}.`
+        : month > startOfMonth(today)
+          ? "Tap a day to skip it."
+          : "Tap a day to check it off or skip it.";
+
+    // The menu for the day picked in the calendar.
+    const picked = cells.find((c) => c.key === this.dayMenu && c.clickable);
+    const menu = picked
+      ? {
+          key: picked.key,
+          title: formatKey(picked.key, {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          }),
+          status:
+            isSkippedOn(habit, picked.key) && !done.has(picked.key)
+              ? "Skipped"
+              : picked.status[0].toUpperCase() + picked.status.slice(1),
+          done: done.has(picked.key),
+          canToggle:
+            picked.key <= today && (done.has(picked.key) || picked.due),
+          canSkip: canSkip(habit, done, picked.key),
+          skipped: isSkippedOn(habit, picked.key),
+          href: `/?date=${picked.key}`,
+        }
+      : null;
     return {
       id: habit.id,
       name: habit.name,
@@ -245,7 +365,12 @@ export const habitsComponent = ({
       color: color.bg,
       weekly,
       paused: isPaused(habit, today),
+      pausedText: pausedText(habit, today),
+      pauses: isArchived(habit) ? [] : pauseList(habit, today),
       archived: isArchived(habit),
+      // Nothing to reset on a habit that has no check-ins and starts today.
+      canReset: done.size > 0 || habit.start_date < today,
+      resetText: resetText(habit.name, done.size),
       archivedText: habit.archived_on
         ? `Archived on ${mediumDate(habit.archived_on)}.`
         : "",
@@ -254,8 +379,10 @@ export const habitsComponent = ({
       monthName,
       monthTitle: formatKey(month, { month: "long", year: "numeric" }),
       pctText: pct === null ? "–" : `${pct}%`,
-      canPrev: month > startOfMonth(habit.start_date),
-      canNext: month < startOfMonth(today),
+      monthHint,
+      menu,
+      hasPaused: cells.some((c) => c.state === "paused"),
+      futureMonth: month > startOfMonth(today),
       weekdays: weekdayOrder(weekStart).map((d) => WEEKDAY_SHORT[d]),
       cells,
     };
@@ -269,6 +396,10 @@ export const habitsComponent = ({
     this.selectedId = id;
     this.month = startOfMonth(this.today);
     this.confirmDelete = false;
+    this.confirmReset = false;
+    this.closePauseForm();
+    this.pauseNotice = "";
+    this.dayMenu = "";
     this.error = "";
     if (updateUrl) this.setUrl(id ? { id } : {});
     this.refresh();
@@ -280,20 +411,71 @@ export const habitsComponent = ({
   },
 
   shiftMonth(months) {
-    this.month = addMonths(this.month || startOfMonth(this.today), months);
+    this.goToMonth(addMonths(this.month || startOfMonth(this.today), months));
+  },
+
+  /** Shows a month, e.g. one picked in the calendar popover. */
+  goToMonth(key) {
+    if (!isDateKey(key)) return;
+    this.month = startOfMonth(key);
+    this.dayMenu = "";
     this.refresh();
   },
 
-  async toggleDay(cell) {
+  // -------------------------------------------------------------------------
+  // Day menu: tapping a calendar day asks what to do with it, so scrolling
+  // past the calendar can't change a day by accident.
+  // -------------------------------------------------------------------------
+
+  openDayMenu(cell) {
     if (!cell.clickable) return;
+    this.dayMenu = this.dayMenu === cell.key ? "" : cell.key;
+    this.refresh();
+    if (this.dayMenu) {
+      this.$nextTick?.(() => document.getElementById("day-menu")?.focus());
+    }
+  },
+
+  /** Closes the menu; `refocus` puts the focus back on its day. */
+  closeDayMenu(refocus = false) {
+    const key = this.dayMenu;
+    this.dayMenu = "";
+    this.refresh();
+    if (refocus && key) {
+      this.$nextTick?.(() =>
+        document.querySelector(`[data-day="${key}"]`)?.focus(),
+      );
+    }
+  },
+
+  async toggleDay(key) {
+    // Not while a reset or another change to the habit is running.
+    if (this.busy) return;
     this.error = "";
-    const ok = await store.toggle(this.selectedId, cell.key, () =>
-      this.refresh(),
-    );
+    this.closeDayMenu(true);
+    const ok = await store.toggle(this.selectedId, key, () => this.refresh());
     if (!ok) {
       this.error =
         "Couldn't save that change. Check your connection and try again.";
     }
+  },
+
+  skipCalendarDay(key) {
+    const habit = store.habit(this.selectedId);
+    this.closeDayMenu(true);
+    return this.run(
+      () => store.updateHabit(habit.id, { pauses: skipDay(habit, key) }),
+      "Couldn't skip the day. Please try again.",
+    );
+  },
+
+  unskipCalendarDay(key) {
+    const habit = store.habit(this.selectedId);
+    this.closeDayMenu(true);
+    return this.run(
+      () => store.updateHabit(habit.id, { pauses: unskipDay(habit, key) }),
+      "Couldn't undo the skip. Please try again.",
+    );
   },
 
   // -------------------------------------------------------------------------
@@ -326,6 +508,109 @@ export const habitsComponent = ({
     );
   },
 
+  // -------------------------------------------------------------------------
+  // Planned pauses
+  // -------------------------------------------------------------------------
+
+  openPauseForm() {
+    const tomorrow = addDays(this.today, 1);
+    this.confirmReset = false;
+    this.confirmDelete = false;
+    this.pauseNotice = "";
+    this.pauseForm = {
+      open: true,
+      from: tomorrow,
+      to: addDays(tomorrow, 6),
+      all: false,
+      error: "",
+    };
+  },
+
+  closePauseForm() {
+    this.pauseForm.open = false;
+    this.pauseFromCal.hide();
+    this.pauseToCal.hide();
+  },
+
+  /** A day picked in the form; the last day never ends up before the first. */
+  setPauseDay(field, key) {
+    this.pauseForm[field] = key;
+    if (field === "from" && this.pauseForm.to < key) this.pauseForm.to = key;
+    this.pauseForm.error = "";
+  },
+
+  /** How many habits "All active habits" would pause. */
+  activeCount() {
+    return store.habits.filter((h) => !isArchived(h)).length;
+  },
+
+  savePause() {
+    const today = this.today;
+    const { from, to, all } = this.pauseForm;
+    const habit = store.habit(this.selectedId);
+    const own = planPause(
+      habit,
+      { from, to },
+      today,
+      store.isDone(habit.id, today),
+    );
+    if (own.error && !all) {
+      this.pauseForm.error = own.error;
+      return;
+    }
+    const targets = all ? store.habits.filter((h) => !isArchived(h)) : [habit];
+    const changes = [];
+    let movedToTomorrow = false;
+    for (const h of targets) {
+      const result =
+        h.id === habit.id
+          ? own
+          : planPause(h, { from, to }, today, store.isDone(h.id, today));
+      // The dates are the same for every habit, so the only error left for
+      // another habit is "today is done and the pause is just today".
+      if (result.error) {
+        if (h.id === habit.id && !/checked off/.test(result.error)) {
+          this.pauseForm.error = result.error;
+          return;
+        }
+        continue;
+      }
+      if (result.from !== from) movedToTomorrow = true;
+      changes.push({ id: h.id, data: { pauses: result.pauses } });
+    }
+    if (!changes.length) {
+      this.pauseForm.error = own.error;
+      return;
+    }
+    const range = pauseRange({ from, to });
+    return this.run(async () => {
+      await store.updateHabits(changes);
+      this.closePauseForm();
+      const who = all
+        ? `${changes.length} habit${changes.length === 1 ? "" : "s"}`
+        : "this habit";
+      this.pauseNotice = `Pause planned for ${who}: ${range}.${
+        movedToTomorrow
+          ? all
+            ? " Habits already checked off today start it tomorrow."
+            : " Today is already checked off, so it starts tomorrow."
+          : ""
+      }`;
+    }, "Couldn't plan the pause. Please try again.");
+  },
+
+  removePlannedPause(pause) {
+    const habit = store.habit(this.selectedId);
+    this.pauseNotice = "";
+    return this.run(
+      () =>
+        store.updateHabit(habit.id, {
+          pauses: removePause(habit, pause, this.today),
+        }),
+      "Couldn't remove the pause. Please try again.",
+    );
+  },
+
   toggleArchive() {
     const habit = store.habit(this.selectedId);
     const data = isArchived(habit)
@@ -336,6 +621,15 @@ export const habitsComponent = ({
       () => store.updateHabit(habit.id, data),
       "Couldn't change the habit. Please try again.",
     );
+  },
+
+  resetHabit() {
+    const id = this.selectedId;
+    return this.run(async () => {
+      await store.resetHabit(id, this.today);
+      this.confirmReset = false;
+      this.month = startOfMonth(this.today);
+    }, "Couldn't reset the habit. Please try again.");
   },
 
   deleteHabit() {

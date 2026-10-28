@@ -54,10 +54,103 @@
           aria-label="Habits"
           class="flex min-w-0 flex-[2_1_560px] flex-col gap-4"
         >
+          <div x-ref="days" class="flex scroll-mt-4 items-center gap-1">
+            <div class="relative min-w-0">
+              <button
+                type="button"
+                x-ref="calTrigger"
+                class="-ml-2 flex min-h-11 min-w-0 items-center gap-1.5 rounded-lg px-2 text-[17px] font-bold hover:bg-ink/[0.06]"
+                aria-haspopup="dialog"
+                :aria-expanded="cal.open.toString()"
+                :aria-label="`${weekTitle}, choose a day`"
+                @click="cal.toggle()"
+              >
+                <span class="truncate" x-text="weekTitle"></span>
+                <svg
+                  viewBox="0 0 24 24"
+                  width="18"
+                  height="18"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                  class="shrink-0 text-muted"
+                >
+                  <rect x="3.5" y="5" width="17" height="15" rx="2.5" />
+                  <path d="M3.5 10h17M8 3v4M16 3v4" />
+                </svg>
+              </button>
+              <load
+                src="/components/calendar-popover.html"
+                cal="cal"
+                trigger="calTrigger"
+                label="Choose a day"
+                align="-left-2"
+              />
+            </div>
+            <div class="ml-auto flex shrink-0 items-center gap-1">
+              <button
+                type="button"
+                x-show="selected !== today"
+                class="btn btn-secondary btn-sm"
+                @click="goToday()"
+              >
+                Today
+              </button>
+              <button
+                type="button"
+                class="btn-icon disabled:opacity-30"
+                @click="shiftWeek(-1)"
+                aria-label="Previous week"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M15 6l-6 6 6 6" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                class="btn-icon disabled:opacity-30"
+                @click="shiftWeek(1)"
+                aria-label="Next week"
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  width="20"
+                  height="20"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M9 6l6 6-6 6" />
+                </svg>
+              </button>
+            </div>
+          </div>
+
           <div
             role="group"
             aria-label="Pick a day"
             class="flex gap-1.5 sm:gap-2"
+            @keydown.left="shiftWeek(-1)"
+            @keydown.right="shiftWeek(1)"
+            @touchstart.passive="swipeX = $event.touches[0].clientX"
+            @touchend="if (swipeX !== null) { const dx = $event.changedTouches[0].clientX - swipeX; swipeX = null; if (Math.abs(dx) > 50) shiftWeek(dx < 0 ? 1 : -1); }"
+            x-data="{ swipeX: null }"
           >
             <template x-for="day in days" :key="day.key">
               <button
@@ -69,11 +162,13 @@
                 :class="day.selected ? 'border-primary bg-surface' : 'border-transparent hover:bg-surface/60'"
               >
                 <span
-                  class="text-[13px] font-semibold text-muted"
+                  class="text-[13px] font-semibold"
+                  :class="day.isToday ? 'text-primary' : 'text-muted'"
                   x-text="day.label"
                 ></span>
                 <span
                   class="grid size-8 place-items-center rounded-full"
+                  :class="day.upcoming && 'opacity-50'"
                   :style="{ background: day.ring }"
                 >
                   <span
@@ -92,68 +187,125 @@
             ></h2>
             <div class="card flex flex-col overflow-hidden">
               <template x-for="(item, i) in items" :key="item.id">
-                <button
-                  type="button"
-                  @click="toggle(item)"
-                  :aria-pressed="item.done.toString()"
-                  class="flex min-h-[76px] w-full items-center gap-4 px-4 py-3 text-left transition-colors hover:bg-canvas/50 sm:px-5"
+                <div
+                  class="flex items-center"
+                  :class="i > 0 && 'border-t border-divider'"
+                >
+                  <button
+                    type="button"
+                    @click="toggle(item)"
+                    :disabled="item.locked"
+                    :aria-pressed="item.locked ? null : item.done.toString()"
+                    class="flex min-h-[76px] min-w-0 flex-1 items-center gap-4 py-3 pl-4 text-left transition-colors enabled:hover:bg-canvas/50 sm:pl-5"
+                    :class="item.canSkip ? 'pr-2' : 'pr-4 sm:pr-5'"
+                  >
+                    <span
+                      class="grid size-8 shrink-0 place-items-center rounded-full border-2 transition-colors"
+                      :class="(item.optional || item.locked) && 'border-dashed opacity-60'"
+                      :style="{ borderColor: item.color.bg, background: item.done ? item.color.bg : 'transparent', color: item.color.fg }"
+                    >
+                      <svg
+                        x-show="item.done"
+                        viewBox="0 0 24 24"
+                        width="20"
+                        height="20"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="3"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                      >
+                        <path d="M5 12.5l4.5 4.5L19 7.5" />
+                      </svg>
+                    </span>
+                    <span class="flex min-w-0 flex-1 flex-col gap-0.5">
+                      <span
+                        class="truncate text-[17px] font-semibold"
+                        :class="item.done ? 'text-muted' : 'text-ink'"
+                        x-text="item.name"
+                      ></span>
+                      <span class="text-sm text-muted" x-text="item.sub"></span>
+                    </span>
+                    <span
+                      class="flex shrink-0 items-center gap-1.5 text-sm font-semibold"
+                      :class="item.streak ? 'text-primary' : 'text-muted'"
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="18"
+                        height="18"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                        :class="item.streak ? 'text-lamp' : 'text-faint'"
+                      >
+                        <path
+                          d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2.2 1.2.8 2 1.6 2.4C10.2 8.4 10.8 5.2 12 3z"
+                        />
+                      </svg>
+                      <span x-text="item.streakText"></span>
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    x-show="item.canSkip"
+                    class="btn btn-quiet btn-sm mr-2 shrink-0 px-3 sm:mr-3"
+                    :disabled="busy"
+                    :aria-label="`Skip ${item.name}`"
+                    @click="skip(item)"
+                  >
+                    Skip
+                  </button>
+                </div>
+              </template>
+              <p
+                x-show="!items.length"
+                class="px-5 py-6 text-muted"
+                x-text="emptyText"
+              ></p>
+            </div>
+          </div>
+
+          <!-- Skipped or paused on this day: they don't count. -->
+          <div x-show="skipped.length" class="flex flex-col gap-2">
+            <h2 class="text-[15px] font-semibold text-muted">
+              Skipped or paused
+            </h2>
+            <ul class="card flex flex-col overflow-hidden">
+              <template x-for="(s, i) in skipped" :key="s.id">
+                <li
+                  class="flex min-h-16 items-center gap-4 py-2 pr-2 pl-4 sm:pl-5"
                   :class="i > 0 && 'border-t border-divider'"
                 >
                   <span
-                    class="grid size-8 shrink-0 place-items-center rounded-full border-2 transition-colors"
-                    :style="{ borderColor: item.color.bg, background: item.done ? item.color.bg : 'transparent', color: item.color.fg }"
-                  >
-                    <svg
-                      x-show="item.done"
-                      viewBox="0 0 24 24"
-                      width="20"
-                      height="20"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="3"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                    >
-                      <path d="M5 12.5l4.5 4.5L19 7.5" />
-                    </svg>
-                  </span>
+                    class="size-8 shrink-0 rounded-full border-2 border-dashed opacity-50"
+                    :style="{ borderColor: s.color.bg }"
+                    aria-hidden="true"
+                  ></span>
                   <span class="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span
-                      class="truncate text-[17px] font-semibold"
-                      :class="item.done ? 'text-muted' : 'text-ink'"
-                      x-text="item.name"
+                      class="truncate text-[17px] font-semibold text-muted"
+                      x-text="s.name"
                     ></span>
-                    <span class="text-sm text-muted" x-text="item.sub"></span>
+                    <span class="text-sm text-muted" x-text="s.sub"></span>
                   </span>
-                  <span
-                    class="flex shrink-0 items-center gap-1.5 text-sm font-semibold"
-                    :class="item.streak ? 'text-primary' : 'text-muted'"
+                  <button
+                    type="button"
+                    x-show="s.skip"
+                    class="btn btn-quiet btn-sm shrink-0 px-3"
+                    :disabled="busy"
+                    :aria-label="`Undo skip for ${s.name}`"
+                    @click="unskip(s)"
                   >
-                    <svg
-                      viewBox="0 0 24 24"
-                      width="18"
-                      height="18"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      aria-hidden="true"
-                      :class="item.streak ? 'text-lamp' : 'text-faint'"
-                    >
-                      <path
-                        d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2.2 1.2.8 2 1.6 2.4C10.2 8.4 10.8 5.2 12 3z"
-                      />
-                    </svg>
-                    <span x-text="item.streakText"></span>
-                  </span>
-                </button>
+                    Undo skip
+                  </button>
+                </li>
               </template>
-              <p x-show="!items.length" class="px-5 py-6 text-muted">
-                Nothing is scheduled for this day.
-              </p>
-            </div>
+            </ul>
           </div>
         </section>
 
@@ -167,30 +319,90 @@
           >
             <span
               class="stat-label"
-              x-text="summary.isToday ? 'Done today' : 'Done on this day'"
+              x-text="summary.isToday ? 'Done today' : summary.isFuture ? 'Upcoming day' : 'Done on this day'"
             ></span>
-            <div class="flex items-baseline justify-between">
-              <span
-                class="text-5xl leading-none font-bold tracking-[-0.02em]"
-                x-text="`${summary.done} / ${summary.total}`"
-              ></span>
+            <p
+              x-show="summary.isFuture"
+              class="text-[22px] leading-tight font-bold first-letter:uppercase"
+              x-text="summary.scheduled"
+            ></p>
+            <span x-show="summary.isFuture" class="text-sm text-muted"
+              >Upcoming days can't be checked off yet.</span
+            >
+            <div
+              x-show="summary.total && !summary.isFuture"
+              class="flex items-baseline justify-between gap-3"
+            >
+              <span class="flex min-w-0 items-baseline gap-2">
+                <span
+                  class="text-5xl leading-none font-bold tracking-[-0.02em]"
+                  x-text="`${summary.done} / ${summary.total}`"
+                ></span>
+                <span
+                  x-show="summary.weekly"
+                  class="text-[15px] font-semibold whitespace-nowrap text-muted"
+                  x-text="`· ${summary.weekly}`"
+                ></span>
+              </span>
               <span
                 class="text-[22px] font-bold text-primary"
                 x-text="`${summary.pct}%`"
               ></span>
             </div>
-            <div class="progress">
+            <div x-show="summary.total && !summary.isFuture" class="progress">
               <span :style="{ width: summary.pct + '%' }"></span>
             </div>
+            <p
+              x-show="!summary.total && !summary.isFuture"
+              class="text-[22px] leading-tight font-bold"
+            >
+              <span
+                x-text="hasDaySkips ? (summary.isToday ? 'Today is skipped' : 'Day skipped') : summary.isToday ? 'Nothing due today' : 'Nothing due on this day'"
+              ></span
+              ><span
+                x-show="summary.weekly"
+                class="text-[15px] font-semibold whitespace-nowrap text-muted"
+                x-text="` · ${summary.weekly}`"
+              ></span>
+            </p>
             <span
               x-show="summary.allDone"
               class="text-[15px] font-semibold text-primary"
-              >All done. Nice work.</span
+              x-text="hasDaySkips ? 'Done. The rest is skipped.' : 'All done. Nice work.'"
+            ></span>
+            <span
+              x-show="summary.optional && !summary.isFuture"
+              class="text-sm text-muted"
+              >Weekly habits count on the day you do them, or when they're
+              due.</span
             >
-            <span x-show="!summary.isToday" class="text-sm text-muted"
-              >You can change the last 7 days here. Older days are in each
-              habit's calendar.</span
+            <div
+              x-show="canSkipDay || hasDaySkips"
+              class="flex items-center justify-between gap-3 border-t border-divider pt-3"
             >
+              <span
+                class="text-sm leading-snug text-muted"
+                x-text="canSkipDay ? 'Sick or away? Skipped habits don\'t count or break streaks.' : 'Skipped habits don\'t count or break streaks.'"
+              ></span>
+              <button
+                type="button"
+                x-show="canSkipDay"
+                class="btn btn-secondary btn-sm shrink-0"
+                :disabled="busy"
+                @click="skipTheDay()"
+              >
+                Skip the day
+              </button>
+              <button
+                type="button"
+                x-show="!canSkipDay && hasDaySkips"
+                class="btn btn-secondary btn-sm shrink-0"
+                :disabled="busy"
+                @click="undoDaySkips()"
+              >
+                Undo skips
+              </button>
+            </div>
             <div
               class="flex items-baseline justify-between border-t border-divider pt-3"
             >
@@ -208,7 +420,9 @@
           >
             <div>
               <h2 class="text-[17px] font-bold">Consistency</h2>
-              <span class="text-sm text-muted">The last 12 weeks.</span>
+              <span class="text-sm text-muted"
+                >The last 12 weeks. Pick a day to open it.</span
+              >
             </div>
             <div class="grid grid-cols-[28px_minmax(0,1fr)] gap-x-2 gap-y-1">
               <span></span>
@@ -231,17 +445,23 @@
                   <span class="h-[18px] leading-[18px]" x-text="d"></span>
                 </template>
               </div>
+              <!-- The squares are a mouse and touch shortcut; the date picker
+                   above is the keyboard and screen reader way to any day. -->
               <div
                 role="img"
                 aria-label="Calendar of completed habits over the last 12 weeks"
                 class="grid grid-cols-12 gap-1"
               >
                 <template x-for="cell in heat.cells" :key="cell.key">
-                  <div
-                    class="h-[18px] rounded-[5px]"
-                    :class="cell.future ? '' : 'heat-' + cell.level"
+                  <button
+                    type="button"
+                    tabindex="-1"
+                    class="h-[18px] rounded-[5px] enabled:cursor-pointer enabled:hover:ring-2 enabled:hover:ring-primary"
+                    :class="[cell.future ? '' : 'heat-' + cell.level, cell.key === selected && 'ring-2 ring-primary']"
+                    :disabled="cell.future"
                     :title="cell.title"
-                  ></div>
+                    @click="openDay(cell.key)"
+                  ></button>
                 </template>
               </div>
             </div>

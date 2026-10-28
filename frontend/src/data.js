@@ -8,13 +8,13 @@
 // and is removed on logout.
 
 import { pb } from "./pb.js";
-import { sortHabits } from "./lib/habits.js";
+import { pausesFrom, sortHabits } from "./lib/habits.js";
 
 const NO_CHECKINS = new Map();
 const CACHE_PREFIX = "habits-cache:";
-// Check-ins sent per request when importing (the server allows up to 100,
-// see pb_migrations/*_enable_batch_api.js), and the least time between two
-// such requests, which keeps import under the server's rate limits
+// Check-ins sent per request when importing or resetting (the server allows
+// up to 100, see pb_migrations/*_enable_batch_api.js), and the least time
+// between two such requests, which keeps them under the server's rate limits
 // (pb_migrations/*_server_settings.js).
 const IMPORT_BATCH = 100;
 const IMPORT_BATCH_GAP_MS = 300;
@@ -31,9 +31,11 @@ export function clearCache() {
 }
 
 // Rate limited: either the request itself, or a request inside a batch.
+// The SDK's `err.data` is the whole response body, so a batch's per-request
+// answers are at err.data.data.requests.
 const isRateLimited = (err) =>
   err?.status === 429 ||
-  Object.values(err?.data?.requests ?? {}).some(
+  Object.values(err?.data?.data?.requests ?? {}).some(
     (r) => r?.response?.status === 429,
   );
 
@@ -217,6 +219,31 @@ export function createStore() {
       return record;
     },
 
+    /**
+     * Updates several habits in one batch request (all or nothing), e.g. a
+     * pause planned for every habit. `changes` is [{ id, data }].
+     */
+    async updateHabits(changes) {
+      if (!changes.length) return [];
+      store.changes++;
+      const records = new Map();
+      // A batch holds at most 100 requests; nobody has that many habits, but
+      // just in case, larger sets go in several batches.
+      for (let i = 0; i < changes.length; i += IMPORT_BATCH) {
+        const batch = pb.createBatch();
+        for (const { id, data } of changes.slice(i, i + IMPORT_BATCH)) {
+          batch.collection("habits").update(id, data);
+        }
+        const results = await withRetry(() => batch.send({ requestKey: null }));
+        for (const r of results) records.set(r.body.id, r.body);
+      }
+      store.habits = sortHabits(
+        store.habits.map((h) => records.get(h.id) ?? h),
+      );
+      store.saveCache();
+      return [...records.values()];
+    },
+
     async deleteHabit(id) {
       store.changes++;
       await pb.collection("habits").delete(id);
@@ -226,8 +253,9 @@ export function createStore() {
     },
 
     /**
-     * Carries out a plan from planImport(): creates the new habits, moves
-     * start dates back where needed, then adds the check-ins in batches.
+     * Carries out a plan from planBackupImport() (lib/backup.js): creates the
+     * new habits, moves start dates back and adds pauses to existing ones
+     * where needed, then adds the check-ins in batches.
      * `onProgress(done, total)` reports check-ins saved so far. If it fails
      * part way, what was saved stays; importing the same file again finishes
      * the rest (habits match by name and existing check-ins are skipped).
@@ -250,16 +278,15 @@ export function createStore() {
         );
         for (const date of dates) pendingCheckins.push([record.id, date]);
       }
-      for (const { habit, startDate, dates } of plan.existing) {
-        if (startDate !== habit.start_date) {
+      for (const { habit, startDate, dates, pauses } of plan.existing) {
+        const data = {};
+        if (startDate !== habit.start_date) data.start_date = startDate;
+        if (pauses) data.pauses = pauses;
+        if (Object.keys(data).length) {
           await withRetry(() =>
             pb
               .collection("habits")
-              .update(
-                habit.id,
-                { start_date: startDate },
-                { requestKey: null },
-              ),
+              .update(habit.id, data, { requestKey: null }),
           );
         }
         for (const date of dates) pendingCheckins.push([habit.id, date]);
@@ -286,6 +313,64 @@ export function createStore() {
 
       await store.load();
       return total;
+    },
+
+    /**
+     * Starts a habit over: deletes all of its check-ins, then moves its start
+     * date to `today`. Pauses end up as if the habit had just been created
+     * (one that is paused now stays paused from today). The check-ins go first,
+     * so if this fails part way the habit is still intact and doing it again
+     * finishes the job. Returns how many check-ins were deleted.
+     */
+    async resetHabit(id, today) {
+      const habit = store.habit(id);
+      store.changes++;
+
+      // Ask the server, not the cache: another device may have added more.
+      const records = await withRetry(() =>
+        pb.collection("checkins").getFullList({
+          filter: pb.filter("habit = {:habit}", { habit: id }),
+          fields: "id",
+          batch: 1000,
+          requestKey: null,
+        }),
+      );
+
+      for (let i = 0; i < records.length; i += IMPORT_BATCH) {
+        const chunk = records.slice(i, i + IMPORT_BATCH);
+        const started = Date.now();
+        await withRetry(() => {
+          const batch = pb.createBatch();
+          for (const { id: checkinId } of chunk) {
+            batch.collection("checkins").delete(checkinId);
+          }
+          return batch.send({ requestKey: null });
+        });
+        // Forget what's gone, so a failure later on doesn't leave deleted
+        // days showing as done.
+        const gone = new Set(chunk.map((r) => r.id));
+        const dates = store.checkins.get(id);
+        for (const [date, checkinId] of dates || []) {
+          if (gone.has(checkinId)) dates.delete(date);
+        }
+        const pause = IMPORT_BATCH_GAP_MS - (Date.now() - started);
+        if (i + IMPORT_BATCH < records.length && pause > 0) {
+          await new Promise((resolve) => setTimeout(resolve, pause));
+        }
+      }
+
+      // Running and planned pauses stay; the ones that are over go with
+      // the history.
+      const record = await pb.collection("habits").update(id, {
+        start_date: today,
+        pauses: pausesFrom(habit, today),
+      });
+      store.habits = sortHabits(
+        store.habits.map((h) => (h.id === id ? record : h)),
+      );
+      store.checkins.delete(id);
+      store.saveCache();
+      return records.length;
     },
 
     /** Saves a new order; `ids` lists habits top to bottom. */

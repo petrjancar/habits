@@ -6,16 +6,25 @@
 
 A small self-hosted habit tracker: check off habits each day, keep streaks going and see how consistent you've been. A [PocketBase](https://pocketbase.io) backend with an [Alpine.js](https://alpinejs.dev) + [Tailwind CSS](https://tailwindcss.com) frontend, served by PocketBase from a single process or Docker container.
 
+<p>
+  <img src="docs/screenshots/today.png" alt="The Today page on a phone: this week's days with progress rings and the day's habits, three of four checked off" width="260">
+  <img src="docs/screenshots/habit.png" alt="A habit's page: current and longest streak, this month's rate and a month calendar of done and missed days" width="260">
+</p>
+
+<img src="docs/screenshots/statistics.png" alt="The Statistics page on a desktop: success rate, completions, best streak, a bar chart by week, rates by habit and a 52-week consistency calendar" width="800">
+
 ## Features
 
-- **Today** - check off today's habits, or any of the last 7 days.
-- **Habits** - add, edit, reorder, pause, archive and delete habits. Every habit has a calendar where any past day can be changed, plus its streaks.
+- **Today** - check off today's habits or any earlier day, page through the weeks, jump to any date with a calendar, and see what's scheduled ahead.
+- **Habits** - add, edit, reorder, archive, reset and delete habits, in 16 colours. Every habit has a calendar of any month with its streaks, where you can check off or skip a day.
 - **Schedules** - every day, chosen weekdays, or a number of times per week.
+- **Pauses and skips** - pause a habit now or plan a pause ahead (a holiday, for one habit or all), and skip a single day ("sick day") without breaking the streak.
 - **Statistics** - success rate, best streak, charts and a 52-week calendar for a week, month, year or all time.
-- **Account** - theme, first day of the week, CSV export and import, account deletion.
+- **Light and dark theme** - pick one, or follow the device's setting.
+- **Account** - first day of the week, backup export and import (JSON), account deletion.
 - **Installable** - on a phone's home screen as a progressive web app (PWA), and works on desktop too.
 
-How streaks are counted and the CSV format are in [docs/how-it-works.md](docs/how-it-works.md).
+How streaks are counted and the backup format are in [docs/how-it-works.md](docs/how-it-works.md).
 
 What is stored and logged is in [docs/privacy.md](docs/privacy.md).
 
@@ -34,7 +43,7 @@ You need Docker with Compose. For anything beyond your own network, and to insta
    ```yaml
    services:
      habits:
-       image: ghcr.io/petrjancar/habits:1
+       image: ghcr.io/petrjancar/habits:2
        container_name: habits
        restart: unless-stopped
        ports:
@@ -52,7 +61,17 @@ You need Docker with Compose. For anything beyond your own network, and to insta
    docker compose up -d
    ```
 
-To update: `docker compose pull && docker compose up -d`.
+### Updating
+
+```bash
+docker compose pull && docker compose up -d
+```
+
+The `:2` tag follows the latest 2.x release, so this picks up new features and fixes, and any database changes are applied when the container starts. A new major version (`:3`) can need something from you, so it's never pulled automatically: read its entry in [CHANGELOG.md](CHANGELOG.md) before changing the tag. To stay on an exact version, use its full tag, such as `:2.0.0`.
+
+### Backups
+
+Everything is in `pb_data`. Back it up by stopping the container and copying the folder, or with the backups in the PocketBase dashboard (Settings → Backups), which can also go to S3-compatible storage. Each user can also download their own habits as a JSON file from the Account page and import it again on any Habits server.
 
 ### HTTPS and reverse proxy
 

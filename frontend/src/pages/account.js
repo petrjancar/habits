@@ -1,13 +1,24 @@
 import { pb } from "../pb.js";
 import { LOGIN_URL, requireAuth } from "../auth.js";
 import { createStore } from "../data.js";
-import { toCsv } from "../lib/habits.js";
-import { MAX_IMPORT_BYTES, planImport } from "../lib/csv-import.js";
+import {
+  MAX_IMPORT_BYTES,
+  backupFileName,
+  buildBackup,
+  planBackupImport,
+} from "../lib/backup.js";
 import { todayKey } from "../lib/dates.js";
 import { THEMES, applyTheme, normalizeTheme } from "../theme.js";
 import { describeError, getFieldErrors, hasErrorCode } from "../errors.js";
 import { validateNewPassword } from "../validation.js";
 import { formatDate, initials } from "../format.js";
+
+// Set by Vite from package.json (see vite.config.js); empty in old builds.
+const APP_VERSION =
+  typeof __APP_VERSION__ === "undefined" ? "" : __APP_VERSION__;
+
+const importHasChanges = (c) =>
+  !!c && (c.newHabits > 0 || c.existingHabits > 0);
 
 const emptyPasswordForm = () => ({
   oldPassword: "",
@@ -45,7 +56,7 @@ export const accountComponent = ({ store = createStore() } = {}) => ({
   exporting: false,
   confirmDelete: false,
 
-  // CSV import: idle -> preview -> saving -> done (or back to idle).
+  // Backup import: idle -> preview -> saving -> done (or back to idle).
   importStage: "idle",
   importPlan: null,
   importFileName: "",
@@ -97,18 +108,23 @@ export const accountComponent = ({ store = createStore() } = {}) => ({
     });
   },
 
-  async exportCsv() {
+  /** Downloads a backup of all habits, check-ins and pauses as JSON. */
+  async exportBackup() {
     this.settingsError = "";
     this.exporting = true;
     try {
       await store.load();
-      const csv = toCsv(store.habits, (id) => store.doneOf(id));
+      const backup = buildBackup(store.habits, (id) => store.doneOf(id), {
+        appVersion: APP_VERSION,
+      });
       const url = URL.createObjectURL(
-        new Blob([`\ufeff${csv}`], { type: "text/csv;charset=utf-8" }),
+        new Blob([JSON.stringify(backup, null, 2)], {
+          type: "application/json",
+        }),
       );
       const link = document.createElement("a");
       link.href = url;
-      link.download = `habits-${todayKey()}.csv`;
+      link.download = backupFileName(todayKey());
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     } catch (err) {
@@ -131,7 +147,7 @@ export const accountComponent = ({ store = createStore() } = {}) => ({
     }
     try {
       const [text] = await Promise.all([file.text(), store.load()]);
-      const plan = planImport(
+      const plan = planBackupImport(
         text,
         store.habits,
         (id) => store.doneOf(id),
@@ -160,30 +176,32 @@ export const accountComponent = ({ store = createStore() } = {}) => ({
       lines.push(`${plural(c.newHabits, "new habit", "new habits")}`);
     if (c.existingHabits) {
       lines.push(
-        `${plural(c.existingHabits, "habit you already have gets", "habits you already have get")} more history`,
+        `${plural(c.existingHabits, "habit you already have gets", "habits you already have get")} added history or pauses`,
       );
     }
-    if (!c.newHabits && !c.checkins) {
+    if (!importHasChanges(c)) {
       lines.push("Nothing new to add: everything in this file is already here");
     } else {
       lines.push(`${plural(c.checkins, "check-in", "check-ins")} to add`);
+      if (c.pauses) {
+        lines.push(`Pauses for ${plural(c.pauses, "habit", "habits")}`);
+      }
     }
-    if (c.duplicates && (c.newHabits || c.checkins)) {
+    if (c.duplicates && importHasChanges(c)) {
       lines.push(
         `${plural(c.duplicates, "check-in is", "check-ins are")} already there and will be skipped`,
       );
     }
     if (c.problems) {
       lines.push(
-        `${plural(c.problems, "row", "rows")} can't be used and will be skipped`,
+        `${plural(c.problems, "problem", "problems")} in the file (see below)`,
       );
     }
     return lines;
   },
 
   get importHasChanges() {
-    const c = this.importPlan?.counts;
-    return !!c && (c.newHabits > 0 || c.checkins > 0);
+    return importHasChanges(this.importPlan?.counts);
   },
 
   cancelImport() {

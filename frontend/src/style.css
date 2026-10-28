@@ -15,6 +15,7 @@
   --color-muted: #56655f; /* secondary text */
   --color-faint: #7d8c85; /* drag handles, inactive icons */
   --color-line: #d3dad6; /* borders */
+  --color-scrollbar: #7a8983; /* scrollbar thumb: at least 3:1 on canvas and surface */
   --color-divider: #e4e9e5; /* rows inside cards */
   --color-track: #dde3df; /* progress tracks, segmented controls */
   --color-selected: #e7ede9; /* selected list row */
@@ -67,6 +68,22 @@
   --color-on-habit-blue: #ffffff;
   --color-habit-plum: #7a4e86;
   --color-on-habit-plum: #ffffff;
+  --color-habit-teal: #2a7c80;
+  --color-on-habit-teal: #ffffff;
+  --color-habit-sky: #5aa9d1;
+  --color-on-habit-sky: #1c2b27;
+  --color-habit-indigo: #4b56a6;
+  --color-on-habit-indigo: #ffffff;
+  --color-habit-rose: #b54c70;
+  --color-on-habit-rose: #ffffff;
+  --color-habit-wine: #8a2f4f;
+  --color-on-habit-wine: #ffffff;
+  --color-habit-orange: #e07b2c;
+  --color-on-habit-orange: #1c2b27;
+  --color-habit-olive: #6f7c26;
+  --color-on-habit-olive: #ffffff;
+  --color-habit-slate: #56636c;
+  --color-on-habit-slate: #ffffff;
 }
 
 /* Dark values, written once and applied by the two selectors below. */
@@ -77,6 +94,7 @@
   --color-muted: #94a49e;
   --color-faint: #6f7f78;
   --color-line: #2b3834;
+  --color-scrollbar: #64736e;
   --color-divider: #24302c;
   --color-track: #26332f;
   --color-selected: #22302c;
@@ -119,6 +137,14 @@
   --color-habit-brick: #d47a60;
   --color-habit-blue: #7fa7d6;
   --color-habit-plum: #b58bc2;
+  --color-habit-teal: #4fa7aa;
+  --color-habit-sky: #7cc4e2;
+  --color-habit-indigo: #929be3;
+  --color-habit-rose: #e58ba6;
+  --color-habit-wine: #c86b8b;
+  --color-habit-orange: #ec9a58;
+  --color-habit-olive: #aebb5a;
+  --color-habit-slate: #9ea9b2;
   --color-on-habit-pine: #13201c;
   --color-on-habit-emerald: #13201c;
   --color-on-habit-sage: #13201c;
@@ -127,6 +153,14 @@
   --color-on-habit-brick: #13201c;
   --color-on-habit-blue: #13201c;
   --color-on-habit-plum: #13201c;
+  --color-on-habit-teal: #13201c;
+  --color-on-habit-sky: #13201c;
+  --color-on-habit-indigo: #13201c;
+  --color-on-habit-rose: #13201c;
+  --color-on-habit-wine: #13201c;
+  --color-on-habit-orange: #13201c;
+  --color-on-habit-olive: #13201c;
+  --color-on-habit-slate: #13201c;
 
   color-scheme: dark;
 }
@@ -147,6 +181,41 @@
     /* Always keep room for the scrollbar, so the layout doesn't move
        sideways between pages that scroll and pages that don't. */
     scrollbar-gutter: stable;
+    /* The browser's own scrollbars, in the app's colours. scrollbar-color is
+       inherited, so every scrolling area gets it; the track stays clear. */
+    scrollbar-color: var(--color-scrollbar) transparent;
+  }
+
+  /* Thin everywhere: no arrow buttons on Windows, and on macOS this also
+     makes the overlay scrollbars use the colours above. */
+  * {
+    scrollbar-width: thin;
+  }
+
+  /* People who ask their system for more contrast get a solid thumb. */
+  @media (prefers-contrast: more) {
+    /* More specific than the dark theme rules above, so it wins there too. */
+    :root:root:root {
+      --color-scrollbar: var(--color-ink);
+    }
+  }
+
+  /* Older Chrome and Safari without scrollbar-color. */
+  @supports not (scrollbar-color: auto) {
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      border: 2px solid transparent;
+      border-radius: 9999px;
+      background: var(--color-scrollbar) padding-box;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
   }
 
   body {
@@ -360,18 +429,32 @@
     background: var(--color-heat-4);
   }
 
+  /* Calendar popover (components/calendar-popover.html). */
+  .cal-pop {
+    /* scroll-mb: when opened near the bottom it scrolls into view above the
+       phone's bottom navigation. */
+    @apply absolute top-full z-30 mt-2 flex w-[min(20rem,calc(100vw-2rem))] scroll-mb-28 flex-col gap-2 rounded-2xl border border-line bg-surface p-3 shadow-xl md:scroll-mb-4;
+  }
+
+  .cal-cell {
+    @apply grid place-items-center rounded-lg text-sm font-semibold transition-colors outline-none hover:ring-2 hover:ring-primary/50 focus-visible:ring-2 focus-visible:ring-primary;
+  }
+
+  /* Dark text on the darker shades, in both themes. */
+  .cal-cell.heat-3,
+  .cal-cell.heat-4 {
+    color: var(--color-on-lamp);
+  }
+
   /* Dialogs: centred card on larger screens, full screen on phones. */
   .sheet {
     @apply m-0 h-dvh max-h-none w-full max-w-none bg-canvas p-0 text-ink sm:m-auto sm:h-fit sm:max-h-[calc(100dvh-48px)] sm:max-w-[520px] sm:rounded-[20px] sm:shadow-2xl;
   }
 
-  /* Still scrolls when it doesn't fit, just without a visible scrollbar. */
-  .sheet {
-    scrollbar-width: none;
-  }
-
-  .sheet::-webkit-scrollbar {
-    display: none;
+  /* A column: the form inside keeps its title and buttons in view and
+     scrolls only its fields (see habits/index.html). */
+  .sheet[open] {
+    @apply flex flex-col overflow-hidden;
   }
 
   .sheet::backdrop {

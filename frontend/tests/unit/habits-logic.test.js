@@ -11,8 +11,8 @@ import {
   resumedOn,
   scheduleLabel,
   streakInfo,
-  toCsv,
   weekProgress,
+  weeklyState,
 } from "../../src/lib/habits.js";
 
 // Sunday, October 25, 2026
@@ -166,20 +166,133 @@ describe("completion", () => {
       target: 3, // only Fri-Sun are active in the first week
     });
   });
+});
 
-  it("treats a weekly habit as done on days its target is met", () => {
-    const habits = [
-      habit(),
-      habit({
-        id: "h2",
-        frequency: "weekly",
-        target: 1,
-        start_date: "2026-10-01",
-      }),
-    ];
-    const sets = { h1: doneSet(), h2: doneSet("2026-10-20") };
-    const status = dayStatus(habits, (id) => sets[id], "2026-10-22");
-    expect(status).toEqual({ done: 1, total: 2 });
+// The week of Mon Oct 19 – Sun Oct 25, 2026.
+const WEEK = eachDay("2026-10-19", "2026-10-25");
+const statesOver = (h, done, weekStart) =>
+  WEEK.map((key) => weeklyState(h, done, key, weekStart));
+const weekly = (props) =>
+  habit({ frequency: "weekly", target: 2, start_date: "2026-10-01", ...props });
+
+describe("weeklyState", () => {
+  it("is optional while there is time, then due", () => {
+    expect(statesOver(weekly(), doneSet())).toEqual([
+      "optional", // Mon
+      "optional",
+      "optional",
+      "optional",
+      "optional", // Fri
+      "due", // Sat: two days left, two needed
+      "due", // Sun
+    ]);
+  });
+
+  it("becomes due later once a check-in is made", () => {
+    expect(statesOver(weekly(), doneSet("2026-10-19"))).toEqual([
+      "done",
+      "optional",
+      "optional",
+      "optional",
+      "optional",
+      "optional", // Sat: two days left, one needed
+      "due", // Sun: the last chance
+    ]);
+  });
+
+  it("is met for the rest of the week once the goal is reached", () => {
+    expect(statesOver(weekly(), doneSet("2026-10-19", "2026-10-21"))).toEqual([
+      "done",
+      "optional",
+      "done",
+      "met",
+      "met",
+      "met",
+      "met",
+    ]);
+  });
+
+  it("only looks at earlier days of the week", () => {
+    // Checking off Saturday and Sunday doesn't change how Monday looked.
+    expect(statesOver(weekly(), doneSet("2026-10-24", "2026-10-25"))).toEqual([
+      "optional",
+      "optional",
+      "optional",
+      "optional",
+      "optional",
+      "done",
+      "done",
+    ]);
+  });
+
+  it("leaves out paused days and days before the start", () => {
+    // Paused Fri-Sun: 4 active days for 3 check-ins.
+    const paused = weekly({
+      target: 3,
+      pauses: [{ from: "2026-10-23", to: "2026-10-25" }],
+    });
+    expect(weeklyState(paused, doneSet(), "2026-10-19")).toBe("optional");
+    expect(weeklyState(paused, doneSet(), "2026-10-20")).toBe("due");
+
+    // Started on Thursday: 4 active days for 3 check-ins.
+    const late = weekly({ target: 3, start_date: "2026-10-22" });
+    expect(weeklyState(late, doneSet(), "2026-10-22")).toBe("optional");
+    expect(weeklyState(late, doneSet(), "2026-10-23")).toBe("due");
+  });
+
+  it("follows the first day of the week", () => {
+    const h = weekly({ target: 1 });
+    // Sunday ends a Monday week but starts a Sunday week.
+    expect(weeklyState(h, doneSet(), "2026-10-25", "monday")).toBe("due");
+    expect(weeklyState(h, doneSet(), "2026-10-25", "sunday")).toBe("optional");
+  });
+});
+
+describe("dayStatus", () => {
+  const daily = habit();
+  const gym = weekly({ id: "h2" });
+  const status = (sets, key) =>
+    dayStatus([daily, gym], (id) => sets[id] ?? doneSet(), key);
+
+  it("leaves a weekly habit out of the score while it is optional", () => {
+    expect(status({ h1: doneSet("2026-10-20") }, "2026-10-20")).toEqual({
+      done: 1,
+      total: 1,
+      optional: 1,
+    });
+  });
+
+  it("counts a weekly habit on the day it is checked", () => {
+    expect(status({ h2: doneSet("2026-10-20") }, "2026-10-20")).toEqual({
+      done: 1,
+      total: 2,
+      optional: 0,
+    });
+  });
+
+  it("counts a weekly habit as missed when it was due", () => {
+    expect(status({ h2: doneSet("2026-10-19") }, "2026-10-25")).toEqual({
+      done: 0,
+      total: 2,
+      optional: 0,
+    });
+  });
+
+  it("leaves a weekly habit out once its goal is met", () => {
+    const sets = { h2: doneSet("2026-10-19", "2026-10-20") };
+    expect(status(sets, "2026-10-22")).toEqual({
+      done: 0,
+      total: 1,
+      optional: 1,
+    });
+  });
+
+  it("has nothing due when only optional weekly habits are left", () => {
+    expect(dayStatus([gym], () => doneSet(), "2026-10-20")).toEqual({
+      done: 0,
+      total: 0,
+      optional: 1,
+    });
   });
 });
 
@@ -272,19 +385,4 @@ describe("pausing and archiving", () => {
       { from: "2026-10-20", to: addDays(TODAY, -1) },
     ]);
   });
-});
-
-it("exports check-ins as CSV", () => {
-  const habits = [
-    habit({ name: 'Say "hi", daily' }),
-    habit({ id: "h2", name: "Run" }),
-  ];
-  const sets = { h1: doneSet("2026-10-02", "2026-10-01"), h2: doneSet() };
-  const csv = toCsv(habits, (id) => sets[id]);
-  expect(csv.split("\r\n")).toEqual([
-    "habit,schedule,started,status,color,note,done_on",
-    '"Say ""hi"", daily",Every day,2026-10-01,active,pine,,2026-10-01',
-    '"Say ""hi"", daily",Every day,2026-10-01,active,pine,,2026-10-02',
-    "Run,Every day,2026-10-01,active,pine,,",
-  ]);
 });

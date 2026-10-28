@@ -29,7 +29,9 @@ Two other places outside the app also record IP addresses and are yours to manag
 
 A copy of `pb_data` contains all of the above, including logs, for as long as you keep the copy.
 
+A backup file a user downloads from Account → Export data holds their habits, pauses and check-ins (not their email or password). It stays on their device and is theirs to keep or delete.
+
 ## Users' rights
 
-- **Access and portability:** Account → Export data downloads all habits and check-ins as a CSV file.
+- **Access and portability:** Account → Export data downloads all habits, check-ins and pauses as a JSON backup file, which Import data can read on any Habits server.
 - **Erasure:** Account → Delete account removes the user, their habits and their check-ins. Older log entries disappear when they pass the retention period, and old backups when you delete them.
