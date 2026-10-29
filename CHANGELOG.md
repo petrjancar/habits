@@ -2,6 +2,16 @@
 
 The version lives in `frontend/package.json` and is shown at the bottom of the Account page. Each release is tagged in git as `vX.Y.Z`.
 
+## 2.0.1 – 2026-10-29
+
+### Fixed
+
+- **Pages could load without their styles after an update.** PocketBase sent the app's pages without a cache header, so a browser could keep showing a page from the previous version, whose style and script files no longer exist. Pages are now always checked with the server (a quick "not modified" when nothing changed). This is done by the new `pb_hooks/cache.pb.js`.
+
+### Upgrading
+
+Run `docker compose pull && docker compose up -d`. If a page looks unstyled right after updating, reload it once (Ctrl+Shift+R, or close and reopen the installed app). From this version on, that shouldn't happen again.
+
 ## 2.0.0 – 2026-10-28
 
 A major version because CSV export and import are replaced by JSON backups (see **Breaking changes**). Your data in `pb_data` is kept as it is.

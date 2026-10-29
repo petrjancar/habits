@@ -65,7 +65,7 @@ habits/
 │   │   └── style.css              # Tailwind, design tokens, component classes
 │   ├── tests/                     # setup.js, helpers.js, unit/*.test.js
 │   └── vite.config.js
-├── pb_hooks/                      # optional PocketBase JS hooks (custom endpoints, events)
+├── pb_hooks/                      # PocketBase JS hooks: cache headers for the app's files
 ├── pb_migrations/                 # schema and server-settings migrations (tracked in git)
 ├── pb_data/                       # database and uploaded files (git-ignored)
 ├── pb_public/                     # production build output (git-ignored)
@@ -92,7 +92,7 @@ habits/
 
 The `Dockerfile` builds the frontend, downloads the pinned PocketBase release for the host architecture (amd64/arm64, checksum-verified) and runs it as a non-root user through `docker-entrypoint.sh`, which creates the superuser from `PB_ADMIN_EMAIL` / `PB_ADMIN_PASSWORD` when they are set. Data lives in `pb_data/` next to your compose file, mounted into the container (git-ignored).
 
-- Migrations in `pb_migrations/` and hooks in `pb_hooks/` are copied into the image and applied on startup. Auto-migrations are disabled in the container, so schema changes made in the server's dashboard are **not** saved as migration files. Make schema changes locally instead (see below).
+- Migrations in `pb_migrations/` and hooks in `pb_hooks/` are copied into the image and applied on startup. The one hook, `cache.pb.js`, sends `Cache-Control: no-cache` with the app's pages, so browsers check them with the server on every load and an update never leaves one with an old page whose files are gone. Files in `assets/` don't need it, because their names change with every build. Auto-migrations are disabled in the container, so schema changes made in the server's dashboard are **not** saved as migration files. Make schema changes locally instead (see below).
 - To bundle a different PocketBase version, change `PB_VERSION` in the `Dockerfile` (or `docker compose build --build-arg PB_VERSION=x.y.z`) and use the same version locally.
 
 ## Data model
